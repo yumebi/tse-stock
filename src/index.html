@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TSE Stock - 東証株価</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <div id="header-left">
+        <h1>TSE Stock</h1>
+        <span class="subtitle">東証リアルタイム株価</span>
+      </div>
+      <div id="add-stock">
+        <input type="text" id="stock-code-input" placeholder="銘柄コード（例: 7203）" />
+        <button id="add-btn">追加</button>
+      </div>
+      <div id="status-msg"></div>
+    </div>
+    <div id="stock-table">
+      <div class="table-header">
+        <span class="col-reorder"></span>
+        <span class="col-code sortable">コード</span>
+        <span class="col-name sortable">企業名</span>
+        <span class="col-price sortable">現在株価</span>
+        <span class="col-change sortable">前日比</span>
+        <span class="col-prev">前日終値</span>
+        <span class="col-open sortable">始値</span>
+        <span class="col-hl">高値</span>
+        <span class="col-hl">安値</span>
+        <span class="col-volume sortable">出来高</span>
+        <span class="col-ma">MA5</span>
+        <span class="col-ma">MA25</span>
+        <span class="col-ma">MA75</span>
+        <span class="col-ind">MACD</span>
+        <span class="col-ind">Sig</span>
+        <span class="col-rsi sortable">RSI</span>
+        <span class="col-sig">シグナル</span>
+        <span class="col-del"></span>
+      </div>
+      <div id="stock-list"></div>
+    </div>
+  </div>
+  <div id="legend">
+    <span class="leg-item" title="移動平均線（5日）"><i class="leg-dot" style="background:#58a6ff"></i>MA5</span>
+    <span class="leg-item" title="移動平均線（25日）"><i class="leg-dot" style="background:#3fb950"></i>MA25</span>
+    <span class="leg-item" title="移動平均線（75日）"><i class="leg-dot" style="background:#f0883e"></i>MA75</span>
+    <span class="leg-item" title="MACD(12,26) — シグナル線を上抜けで買い"><i class="leg-dot" style="background:#e6edf3"></i>MACD</span>
+    <span class="leg-item" title="MACDシグナル(9) — MACDがSigを上抜けで買い"><i class="leg-dot" style="background:#8b949e"></i>Sig</span>
+    <span class="leg-item" title="RSI(14)≧70 買われすぎ（売りサイン）"><i class="leg-dot" style="background:#f85149"></i>RSI≧70</span>
+    <span class="leg-item" title="RSI(14)≦30 売られすぎ（買いサイン）"><i class="leg-dot" style="background:#58a6ff"></i>RSI≦30</span>
+    <span class="leg-item" title="ボリンジャーバンド(20日,±2σ) 上限/下限タッチ"><i class="leg-dot" style="background:#bc8cff"></i>BB±2σ</span>
+    <span class="leg-item" title="出来高が過去平均の1.5倍以上"><i class="leg-dot" style="background:#e6edf3"></i>出来高増</span>
+  </div>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>
