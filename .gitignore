@@ -7,6 +7,7 @@ src-tauri/target/*
 !src-tauri/target/release/
 src-tauri/target/release/*
 !src-tauri/target/release/tse-stock.exe
+!src-tauri/target/release/bundle/
 
 # IDE
 .vscode/
