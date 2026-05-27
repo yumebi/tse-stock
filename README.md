@@ -105,6 +105,21 @@ npm run tauri build
 
 ビルド後の実行ファイルは `src-tauri/target/release/tse-stock.exe` に生成されます。
 
+### macOS 版のビルド
+
+Mac上で以下を実行してください：
+
+```bash
+git clone https://github.com/yumebi/tse-stock.git
+cd tse-stock
+npm install
+npm run tauri build
+```
+
+ビルド後、`src-tauri/target/release/bundle/dmg/` に `.dmg` インストーラーが生成されます。
+
+> ※ macOSではコード署名がないため、初回起動時に「開発元が未確認」の警告が出ます。システム設定の「プライバシーとセキュリティ」から許可してください。
+
 ### 開発モード（ホットリロード）
 
 ```bash
