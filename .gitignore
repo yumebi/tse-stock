@@ -3,7 +3,10 @@ node_modules/
 
 # Build output
 dist/
-src-tauri/target/
+src-tauri/target/*
+!src-tauri/target/release/
+src-tauri/target/release/*
+!src-tauri/target/release/tse-stock.exe
 
 # IDE
 .vscode/
