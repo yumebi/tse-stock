@@ -29,15 +29,16 @@
         <button id="cols-btn" title="カラム表示切替">⚙</button>
       </div>
       <div id="cols-menu" class="hidden">
-        <label><input type="checkbox" data-col="col-spark" checked>5日</label>
-        <label><input type="checkbox" data-col="col-change" checked>前日比</label>
-        <label><input type="checkbox" data-col="col-prev" checked>前日終値</label>
-        <label><input type="checkbox" data-col="col-hl" checked>高値/安値</label>
-        <label><input type="checkbox" data-col="col-volume" checked>出来高</label>
-        <label><input type="checkbox" data-col="col-ma" checked>MA</label>
-        <label><input type="checkbox" data-col="col-ind" checked>MACD</label>
-        <label><input type="checkbox" data-col="col-rsi" checked>RSI</label>
-        <label><input type="checkbox" data-col="col-score" checked>判定</label>
+        <div class="cols-header">カラム切替（ドラッグで並び替え）</div>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-spark" checked>5日</label>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-change" checked>前日比</label>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-prev" checked>前日終値</label>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-hl" checked>高値/安値</label>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-volume" checked>出来高</label>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-ma" checked>MA</label>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-ind" checked>MACD</label>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-rsi" checked>RSI</label>
+        <label draggable="true" class="col-item"><span class="drag-handle">⋮</span><input type="checkbox" data-col="col-score" checked>判定</label>
       </div>
       <div id="status-msg"></div>
     </div>

@@ -5,8 +5,33 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 // ===== 状態 =====
 const state = {
   tabs: [], activeTabIdx: 0, sortKey: null, sortAsc: true, paused: false, prevSignals: {},
-  hiddenCols: new Set(JSON.parse(localStorage.getItem("tse-stock-cols")||"[]")),
+  hiddenCols: new Set(JSON.parse(localStorage.getItem("tse-stock-cols") || "[]")),
+  colOrder: JSON.parse(localStorage.getItem("tse-stock-col-order") || '["col-code","col-name","col-price","col-spark","col-change","col-prev","col-open","col-hl-h","col-hl-l","col-volume","col-ma5","col-ma25","col-ma75","col-macd","col-sig","col-rsi","col-score","col-sig-main"]'),
 };
+
+// COLS: index in grid (0-20). Fixed cols: reorder(0), code(1), name(2), price(3), spark(4), change(5), prev(6), open(7), hl_h(8), hl_l(9), volume(10), ma5(11), ma25(12), ma75(13), macd(14), macd_sig(15), rsi(16), score(17), sig_main(18), del(19)
+// We only allow reordering of toggleable cols: spark(4), change(5), prev(6), hl(8,9), volume(10), ma(11,12,13), macd(14,15), rsi(16), score(17)
+
+const COL_DEFS = [
+  { cls: "col-spark", idx: 4, label: "5日" },
+  { cls: "col-change", idx: 5, label: "前日比" },
+  { cls: "col-prev", idx: 6, label: "前日終値" },
+  { cls: "col-hl", idx: 8, label: "高値" },
+  { cls: "col-hl", idx: 9, label: "安値" },
+  { cls: "col-volume", idx: 10, label: "出来高" },
+  { cls: "col-ma", idx: 11, label: "MA5" },
+  { cls: "col-ma", idx: 12, label: "MA25" },
+  { cls: "col-ma", idx: 13, label: "MA75" },
+  { cls: "col-ind", idx: 14, label: "MACD" },
+  { cls: "col-ind", idx: 15, label: "Sig" },
+  { cls: "col-rsi", idx: 16, label: "RSI" },
+  { cls: "col-score", idx: 17, label: "判定" },
+];
+
+function saveColState() {
+  localStorage.setItem("tse-stock-cols", JSON.stringify([...state.hiddenCols]));
+  localStorage.setItem("tse-stock-col-order", JSON.stringify(state.colOrder));
+}
 
 // ===== ウィンドウ =====
 const win = getCurrentWindow();
@@ -55,7 +80,30 @@ function gradClass(pct) { const a = Math.abs(pct); if (a >= 5) return pct > 0 ? 
 function scoreSignals(sigs) { let buy = 0, sell = 0; for (const s of sigs || []) { if (s.includes("GC") || s.includes("買い") || s.includes("上抜") || s.includes("続騰")) buy++; if (s.includes("DC") || s.includes("売り") || s.includes("下抜") || s.includes("続落") || s.includes("買われ")) sell++; } return { buy, sell }; }
 function scoreClass(sigs) { const { buy, sell } = scoreSignals(sigs); const net = buy - sell; if (net > 0) return "bullish"; if (net < 0) return "bearish"; return "neutral"; }
 function scoreText(sigs) { const { buy, sell } = scoreSignals(sigs); if (buy === 0 && sell === 0) return "-"; return `🟢${buy} 🔴${sell}`; }
-function hidCol(cls) { return state.hiddenCols.has(cls) ? " hidden-col" : ""; }
+
+// ===== カラム可視性 =====
+function applyColVisibility() {
+  // header
+  tableHeader.querySelectorAll("span").forEach(sp => {
+    for (const cls of sp.classList) {
+      if (cls.startsWith("col-") && state.hiddenCols.has(cls)) { sp.style.display = "none"; return; }
+    }
+    sp.style.display = "";
+  });
+  // rows
+  stockList.querySelectorAll(".stock-row").forEach(row => {
+    row.querySelectorAll("span[class*='cell-']").forEach(cell => {
+      for (const cls of cell.classList) {
+        const stripped = cls.replace("cell-", "col-");
+        if (state.hiddenCols.has(stripped) && COL_DEFS.some(d => stripped.includes(d.cls))) {
+          cell.style.display = "none";
+          return;
+        }
+      }
+      cell.style.display = "";
+    });
+  });
+}
 
 // ===== stocks参照 =====
 function stocks() { return state.tabs[state.activeTabIdx]?.stocks || []; }
@@ -63,97 +111,141 @@ function setStocks(arr) { if (state.tabs[state.activeTabIdx]) state.tabs[state.a
 
 // ===== 指数 =====
 async function fetchIndices() {
-  try {
-    const n225 = await invoke("fetch_index_cmd", { symbol: "^N225" });
-    idxN225.innerHTML = `日経 ${n225.price.toLocaleString()} <span class="${n225.change >= 0 ? 'up' : 'down'}">${n225.change >= 0 ? '+' : ''}${n225.changePercent.toFixed(2)}%</span>`;
-  } catch (_) { idxN225.innerHTML = "日経 ---"; }
-  try {
-    const topx = await invoke("fetch_index_cmd", { symbol: "^TOPX" });
-    idxTopx.innerHTML = `TOPIX ${topx.price.toLocaleString()} <span class="${topx.change >= 0 ? 'up' : 'down'}">${topx.change >= 0 ? '+' : ''}${topx.changePercent.toFixed(2)}%</span>`;
-  } catch (_) { idxTopx.innerHTML = "TOPIX ---"; }
+  try { const n225 = await invoke("fetch_index_cmd", { symbol: "^N225" }); idxN225.innerHTML = `日経 ${n225.price.toLocaleString()} <span class="${n225.change >= 0 ? 'up' : 'down'}">${n225.change >= 0 ? '+' : ''}${n225.changePercent.toFixed(2)}%</span>`; } catch (_) { idxN225.innerHTML = "日経 ---"; }
+  try { const topx = await invoke("fetch_index_cmd", { symbol: "^TOPX" }); idxTopx.innerHTML = `TOPIX ${topx.price.toLocaleString()} <span class="${topx.change >= 0 ? 'up' : 'down'}">${topx.change >= 0 ? '+' : ''}${topx.changePercent.toFixed(2)}%</span>`; } catch (_) { idxTopx.innerHTML = "TOPIX ---"; }
 }
 
 // ===== CSVエクスポート =====
 function exportCSV() {
-  const arr = stocks();
-  if (arr.length === 0) return;
+  const arr = stocks(); if (arr.length === 0) return;
   const headers = ["コード", "企業名", "現在株価", "前日比%", "前日比", "前日終値", "始値", "高値", "安値", "出来高", "MA5", "MA25", "MA75", "MACD", "Sig", "RSI", "判定"];
   const rows = arr.map(s => [s.code, s.nameJa || s.name, s.price, s.changePercent?.toFixed(2), s.change, s.prevClose, s.open, s.high, s.low, s.volume, s.ma5?.toFixed(2), s.ma25?.toFixed(2), s.ma75?.toFixed(2), s.macd?.toFixed(4), s.macdSignal?.toFixed(4), s.rsi?.toFixed(1), scoreText(s.signals)]);
   const csv = [headers, ...rows].map(r => r.map(c => `"${(c ?? '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `tse-stock-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-  URL.revokeObjectURL(url);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `tse-stock-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
   setStatus("CSVエクスポート完了", false);
 }
 
-// ===== カラム切替 =====
+// ===== カラム切替 + DnD並び替え =====
 colsBtn.addEventListener("click", () => colsMenu.classList.toggle("hidden"));
-colsMenu.querySelectorAll("input").forEach(cb => {
-  cb.checked = !state.hiddenCols.has(cb.dataset.col);
-  cb.addEventListener("change", () => {
-    if (cb.checked) state.hiddenCols.delete(cb.dataset.col);
-    else state.hiddenCols.add(cb.dataset.col);
-    localStorage.setItem("tse-stock-cols", JSON.stringify([...state.hiddenCols]));
-    render();
-  });
+
+colsMenu.addEventListener("click", e => {
+  if (e.target.type === "checkbox" && e.target.dataset.col) {
+    const col = e.target.dataset.col;
+    if (e.target.checked) state.hiddenCols.delete(col);
+    else state.hiddenCols.add(col);
+    saveColState();
+    applyColVisibility();
+  }
 });
+
+// DnD for column reorder
+let colDragSrc = null;
+colsMenu.addEventListener("dragstart", e => {
+  const item = e.target.closest(".col-item");
+  if (!item) return;
+  colDragSrc = item;
+  item.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+});
+colsMenu.addEventListener("dragover", e => {
+  e.preventDefault();
+  const item = e.target.closest(".col-item");
+  if (!item || item === colDragSrc) return;
+  item.classList.add("drag-over");
+  e.dataTransfer.dropEffect = "move";
+});
+colsMenu.addEventListener("dragleave", e => {
+  const item = e.target.closest(".col-item");
+  if (!item) return;
+  if (e.relatedTarget && item.contains(e.relatedTarget)) return;
+  item.classList.remove("drag-over");
+});
+colsMenu.addEventListener("drop", e => {
+  e.preventDefault();
+  const target = e.target.closest(".col-item");
+  if (!target || !colDragSrc || target === colDragSrc) return;
+  target.classList.remove("drag-over");
+  // Reorder colsMenu children
+  const items = [...colsMenu.querySelectorAll(".col-item")];
+  const fromIdx = items.indexOf(colDragSrc), toIdx = items.indexOf(target);
+  if (fromIdx >= 0 && toIdx >= 0) {
+    if (fromIdx < toIdx) colsMenu.insertBefore(colDragSrc, target.nextSibling);
+    else colsMenu.insertBefore(colDragSrc, target);
+    // Update state.colOrder from the new DOM order
+    state.colOrder = items.map(el => el.querySelector("input").dataset.col);
+    saveColState();
+    render();
+  }
+});
+colsMenu.addEventListener("dragend", () => {
+  if (colDragSrc) colDragSrc.classList.remove("dragging");
+  colsMenu.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
+  colDragSrc = null;
+});
+
 document.addEventListener("click", e => { if (!colsBtn.contains(e.target) && !colsMenu.contains(e.target)) colsMenu.classList.add("hidden"); });
 
 // ===== ソート =====
 const SORT_KEYS = { "col-code": { key: "code" }, "col-name": { key: "nameJa" }, "col-price": { key: "price" }, "col-change": { key: "change" }, "col-open": { key: "open" }, "col-volume": { key: "volume" }, "col-rsi": { key: "rsi" } };
-tableHeader.addEventListener("click", (e) => { const sp = e.target.closest("span"); if (!sp) return; const cls = [...sp.classList].find(c => SORT_KEYS[c]); if (!cls || !SORT_KEYS[cls].key) return; const sk = SORT_KEYS[cls]; if (state.sortKey === sk.key) state.sortAsc = !state.sortAsc; else { state.sortKey = sk.key; state.sortAsc = true; } render(); });
+tableHeader.addEventListener("click", e => {
+  const sp = e.target.closest("span"); if (!sp) return;
+  const cls = [...sp.classList].find(c => SORT_KEYS[c]); if (!cls || !SORT_KEYS[cls].key) return;
+  const sk = SORT_KEYS[cls];
+  state.sortKey = state.sortKey === sk.key ? state.sortKey : sk.key;
+  state.sortAsc = state.sortKey === sk.key ? !state.sortAsc : true;
+  render();
+});
 function sortArr(arr) { if (!state.sortKey) return arr; const k = state.sortKey, asc = state.sortAsc; return [...arr].sort((a, b) => { let va = a[k], vb = b[k]; if (va == null) va = asc ? "\uffff" : ""; if (vb == null) vb = asc ? "\uffff" : ""; if (typeof va === "string") return asc ? va.localeCompare(vb, "ja") : vb.localeCompare(va, "ja"); return asc ? va - vb : vb - va; }); }
 
 // ===== タブ =====
 function renderTabs() { tabsEl.innerHTML = state.tabs.map((t, i) => `<button class="tab-btn${i === state.activeTabIdx ? " active" : ""}" data-idx="${i}">${t.name}${state.tabs.length > 1 ? `<span class="tab-del" data-idx="${i}">×</span>` : ""}</button>`).join(""); tabsEl.querySelectorAll(".tab-btn").forEach(b => { b.addEventListener("click", e => { if (e.target.classList.contains("tab-del")) { deleteTab(parseInt(e.target.dataset.idx)); return; } switchTab(parseInt(b.dataset.idx)); }); }); }
-function switchTab(idx) { state.activeTabIdx = idx; state.sortKey = null; state.sortAsc = true; saveAll(); renderTabs(); render(); }
-function addTab() { const name = `リスト${state.tabs.length + 1}`; state.tabs.push({ name, stocks: [] }); state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); }
-function deleteTab(idx) { if (state.tabs.length <= 1) return; state.tabs.splice(idx, 1); if (state.activeTabIdx >= state.tabs.length) state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); }
+function switchTab(idx) { state.activeTabIdx = idx; state.sortKey = null; state.sortAsc = true; saveAll(); renderTabs(); render(); applyColVisibility(); }
+function addTab() { const name = `リスト${state.tabs.length + 1}`; state.tabs.push({ name, stocks: [] }); state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); applyColVisibility(); }
+function deleteTab(idx) { if (state.tabs.length <= 1) return; state.tabs.splice(idx, 1); if (state.activeTabIdx >= state.tabs.length) state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); applyColVisibility(); }
 
 // ===== レンダリング =====
 const priceFlash = {};
+
+function rowHtml(s, i, sorted) {
+  const up = s.change >= 0, rsiC = s.rsi != null ? (s.rsi > 70 ? "over" : s.rsi < 30 ? "under" : "") : "";
+  const nameCache = getNameCache();
+  const nameJa = nameCache[s.code] || s.nameJa;
+  const nm = nameJa ? `<span class="ja">${nameJa}</span><span class="en">${s.name}</span>` : s.name;
+  const isF = i === 0, isL = i === sorted.length - 1, fl = priceFlash[s.code] || "";
+
+  const cells = [
+    `<span class="cell-reorder"><button class="reorder-btn up" data-code="${s.code}" ${isF ? "disabled" : ""}>▲</button><button class="reorder-btn down" data-code="${s.code}" ${isL ? "disabled" : ""}>▼</button></span>`,
+    `<span class="cell-code">${s.code}</span>`,
+    `<span class="cell-name" title="${nameJa || s.name}">${nm}</span>`,
+    `<span class="cell-price ${fl ? "flash-" + fl : ""}">¥${fmt(s.price)}</span>`,
+    `<span class="cell-spark">${sparkline(s.recentCloses)}</span>`,
+    `<span class="cell-change ${up ? "up" : "down"} ${gradClass(s.changePercent)}">${fmtPct(s.changePercent)} (${fmt(s.change)})</span>`,
+    `<span class="cell-prev">¥${fmt(s.prevClose)}</span>`,
+    `<span class="cell-open">¥${fmt(s.open)}</span>`,
+    `<span class="cell-hl">¥${fmt(s.high)}${s.highTime ? `<span class="time">${s.highTime}</span>` : ""}</span>`,
+    `<span class="cell-hl">¥${fmt(s.low)}${s.lowTime ? `<span class="time">${s.lowTime}</span>` : ""}</span>`,
+    `<span class="cell-volume ${volClass(s)}">${fmt(s.volume)}</span>`,
+    `<span class="cell-ma ma5">${fmtOpt(s.ma5)}</span>`,
+    `<span class="cell-ma ma25">${fmtOpt(s.ma25)}</span>`,
+    `<span class="cell-ma ma75">${fmtOpt(s.ma75)}</span>`,
+    `<span class="cell-ind">${fmtOpt(s.macd)}</span>`,
+    `<span class="cell-ind">${fmtOpt(s.macdSignal)}</span>`,
+    `<span class="cell-rsi ${rsiC}">${fmtOpt(s.rsi)}</span>`,
+    `<span class="cell-score ${scoreClass(s.signals)}">${scoreText(s.signals)}</span>`,
+    `<span class="cell-sig">${s.signals?.length ? `<span class="sig-inner">${s.signals.join(" ⏺ ")} ⏺ ${s.signals.join(" ⏺ ")}</span>` : ""}</span>`,
+    `<span class="cell-del"><button class="del-btn" data-code="${s.code}">×</button></span>`,
+  ];
+  return `<div class="stock-row" data-code="${s.code}">${cells.join("")}</div>`;
+}
+
 function render() {
   const stks = stocks();
   if (stks.length === 0) { stockList.innerHTML = `<div class="empty-state">銘柄がありません。上の入力欄からコードを追加してください。</div>`; return; }
-  const nameCache = getNameCache();
   const sorted = sortArr(stks);
-  stockList.innerHTML = sorted.map((s, i) => {
-    const up = s.change >= 0;
-    const rsiC = s.rsi != null ? (s.rsi > 70 ? "over" : s.rsi < 30 ? "under" : "") : "";
-    const nameJa = nameCache[s.code] || s.nameJa;
-    const nm = nameJa ? `<span class="ja">${nameJa}</span><span class="en">${s.name}</span>` : s.name;
-    const isF = i === 0, isL = i === sorted.length - 1;
-    const fl = priceFlash[s.code] || "";
-    return `<div class="stock-row" data-code="${s.code}">
-      <span class="cell-reorder"><button class="reorder-btn up" data-code="${s.code}" ${isF ? "disabled" : ""}>▲</button><button class="reorder-btn down" data-code="${s.code}" ${isL ? "disabled" : ""}>▼</button></span>
-      <span class="cell-code">${s.code}</span>
-      <span class="cell-name" title="${nameJa || s.name}">${nm}</span>
-      <span class="cell-price ${fl ? "flash-" + fl : ""}">¥${fmt(s.price)}</span>
-      <span class="cell-spark${hidCol("col-spark")}">${sparkline(s.recentCloses)}</span>
-      <span class="cell-change ${up ? "up" : "down"} ${gradClass(s.changePercent)}${hidCol("col-change")}">${fmtPct(s.changePercent)} (${fmt(s.change)})</span>
-      <span class="cell-prev${hidCol("col-prev")}">¥${fmt(s.prevClose)}</span>
-      <span class="cell-open">¥${fmt(s.open)}</span>
-      <span class="cell-hl${hidCol("col-hl")}">¥${fmt(s.high)}${s.highTime ? `<span class="time">${s.highTime}</span>` : ""}</span>
-      <span class="cell-hl${hidCol("col-hl")}">¥${fmt(s.low)}${s.lowTime ? `<span class="time">${s.lowTime}</span>` : ""}</span>
-      <span class="cell-volume ${volClass(s)}${hidCol("col-volume")}">${fmt(s.volume)}</span>
-      <span class="cell-ma ma5${hidCol("col-ma")}">${fmtOpt(s.ma5)}</span>
-      <span class="cell-ma ma25${hidCol("col-ma")}">${fmtOpt(s.ma25)}</span>
-      <span class="cell-ma ma75${hidCol("col-ma")}">${fmtOpt(s.ma75)}</span>
-      <span class="cell-ind${hidCol("col-ind")}">${fmtOpt(s.macd)}</span>
-      <span class="cell-ind${hidCol("col-ind")}">${fmtOpt(s.macdSignal)}</span>
-      <span class="cell-rsi ${rsiC}${hidCol("col-rsi")}">${fmtOpt(s.rsi)}</span>
-      <span class="cell-score ${scoreClass(s.signals)}${hidCol("col-score")}">${scoreText(s.signals)}</span>
-      <span class="cell-sig">${s.signals?.length ? `<span class="sig-inner">${s.signals.join(" ⏺ ")} ⏺ ${s.signals.join(" ⏺ ")}</span>` : ""}</span>
-      <span class="cell-del"><button class="del-btn" data-code="${s.code}">×</button></span>
-    </div>`;
-  }).join("");
+  stockList.innerHTML = sorted.map((s, i) => rowHtml(s, i, sorted)).join("");
   for (const c of Object.keys(priceFlash)) delete priceFlash[c];
-  // header hiddenCols
-  tableHeader.querySelectorAll("span[class*='col-']").forEach(sp => {
-    for (const cls of sp.classList) { if (state.hiddenCols.has(cls)) sp.classList.add("hidden-col"); else sp.classList.remove("hidden-col"); }
-  });
+  applyColVisibility();
   // sort indicator
   tableHeader.querySelectorAll("span").forEach(s => s.classList.remove("sort-asc", "sort-desc"));
   if (state.sortKey) {
@@ -163,7 +255,7 @@ function render() {
   }
 }
 
-stockList.addEventListener("click", (e) => {
+stockList.addEventListener("click", e => {
   const upB = e.target.closest(".reorder-btn.up"), dnB = e.target.closest(".reorder-btn.down"), delB = e.target.closest(".del-btn");
   const arr = stocks();
   if (upB && !upB.disabled) { const c = upB.dataset.code, i = arr.findIndex(s => s.code === c); if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; setStocks(arr); saveAll(); render(); } }
@@ -173,7 +265,7 @@ stockList.addEventListener("click", (e) => {
 
 // ===== 銘柄操作 =====
 async function addStock(code) { code = code.trim(); if (!code) return; const arr = stocks(); if (arr.find(s => s.code === code)) { setStatus(`${code} は既に追加済み`, true); return; } setStatus(`${code} 取得中...`, false); try { const data = await invoke("fetch_stock_cmd", { code }); const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); } data._volAvg = data.volume; arr.push(data); setStocks(arr); saveAll(); render(); setStatus(`${code} 追加完了`, false); } catch (e) { setStatus(`${code} の取得に失敗: ${e}`, true); } }
-function removeStock(code) { const arr = stocks(); setStocks(arr.filter(s => s.code !== code)); delete state.prevSignals[code]; saveAll(); render(); }
+function removeStock(code) { const arr = stocks(); setStocks(arr.filter(s => s.code !== code)); delete state.prevSignals[code]; saveAll(); render(); applyColVisibility(); }
 
 // ===== 一時停止 =====
 pauseBtn.addEventListener("click", () => { state.paused = !state.paused; pauseBtn.textContent = state.paused ? "▶" : "⏸"; pauseBtn.classList.toggle("paused", state.paused); setStatus(state.paused ? "自動更新停止中" : "自動更新再開", false); });
@@ -210,8 +302,7 @@ setInterval(async () => {
   }
   render();
   fetchIndices();
-  const now = new Date();
-  setStatus(`更新完了 ${now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`, false);
+  setStatus(`更新完了 ${new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`, false);
 }, 30000);
 
 // ===== ウィンドウ保存 =====
@@ -219,7 +310,7 @@ let saveT; async function onWC() { clearTimeout(saveT); saveT = setTimeout(saveW
 win.onResized(onWC); win.onMoved(onWC);
 
 // ===== 進捗イベント =====
-listen("stock-progress", (e) => { const { code, step } = e.payload; setStatus(`${code}: ${step}`, false); });
+listen("stock-progress", e => { const { code, step } = e.payload; setStatus(`${code}: ${step}`, false); });
 
 // ===== 起動 =====
 init();
