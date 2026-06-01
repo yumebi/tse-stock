@@ -3,54 +3,61 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // ===== カラム定義 =====
+// 全カラム定義。movable=true は移動可能（◀▶表示）。toggle は非表示切替対象。
 const ALL_COLS = [
-  { k: "reorder", w: "48px", label: "", fixed: true },
-  { k: "code", w: "70px", label: "コード", fixed: true },
-  { k: "name", w: "0.7fr", label: "企業名", fixed: true },
-  { k: "price", w: "105px", label: "現在株価", fixed: true },
-  { k: "spark", w: "70px", label: "5日", toggle: "spark" },
-  { k: "change", w: "120px", label: "前日比", toggle: "change" },
-  { k: "prev", w: "105px", label: "前日終値", toggle: "prev" },
-  { k: "open", w: "100px", label: "始値", fixed: true },
-  { k: "high", w: "95px", label: "高値", toggle: "hl" },
-  { k: "low", w: "95px", label: "安値", toggle: "hl" },
-  { k: "volume", w: "80px", label: "出来高", toggle: "volume" },
-  { k: "ma5", w: "72px", label: "MA5", toggle: "ma" },
-  { k: "ma25", w: "72px", label: "MA25", toggle: "ma" },
-  { k: "ma75", w: "72px", label: "MA75", toggle: "ma" },
-  { k: "macd", w: "68px", label: "MACD", toggle: "ind" },
-  { k: "sig", w: "55px", label: "Sig", toggle: "ind" },
-  { k: "rsi", w: "52px", label: "RSI", toggle: "rsi" },
-  { k: "score", w: "58px", label: "判定", toggle: "score" },
-  { k: "signals", w: "1fr", label: "シグナル", fixed: true },
-  { k: "del", w: "28px", label: "", fixed: true },
+  { k: "reorder", w: "48px", label: "" },
+  { k: "code", w: "70px", label: "コード", movable: true },
+  { k: "name", w: "0.7fr", label: "企業名", movable: true },
+  { k: "price", w: "105px", label: "現在株価", movable: true },
+  { k: "spark", w: "70px", label: "5日", movable: true, toggle: "spark" },
+  { k: "change", w: "120px", label: "前日比", movable: true, toggle: "change" },
+  { k: "prev", w: "105px", label: "前日終値", movable: true, toggle: "prev" },
+  { k: "open", w: "100px", label: "始値", movable: true },
+  { k: "high", w: "95px", label: "高値", movable: true, toggle: "hl" },
+  { k: "low", w: "95px", label: "安値", movable: true, toggle: "hl" },
+  { k: "volume", w: "80px", label: "出来高", movable: true, toggle: "volume" },
+  { k: "ma5", w: "72px", label: "MA5", movable: true, toggle: "ma" },
+  { k: "ma25", w: "72px", label: "MA25", movable: true, toggle: "ma" },
+  { k: "ma75", w: "72px", label: "MA75", movable: true, toggle: "ma" },
+  { k: "macd", w: "68px", label: "MACD", movable: true, toggle: "ind" },
+  { k: "sig", w: "55px", label: "Sig", movable: true, toggle: "ind" },
+  { k: "rsi", w: "52px", label: "RSI", movable: true, toggle: "rsi" },
+  { k: "score", w: "58px", label: "判定", movable: true, toggle: "score" },
+  { k: "signals", w: "1fr", label: "シグナル", movable: true },
+  { k: "del", w: "28px", label: "" },
 ];
+
+const TOGGLE_KEYS = new Set(ALL_COLS.filter(c => c.toggle).map(c => c.toggle));
+const MOVABLE_KEYS = ALL_COLS.filter(c => c.movable).map(c => c.k);
 
 // ===== 状態 =====
 const state = {
   tabs: [], activeTabIdx: 0, sortKey: null, sortAsc: true, paused: false, prevSignals: {},
   hiddenToggles: new Set(JSON.parse(localStorage.getItem("tse-stock-hide") || "[]")),
-  toggleOrder: JSON.parse(localStorage.getItem("tse-stock-tgl-order") || '["spark","change","prev","hl","volume","ma","ind","rsi","score"]'),
+  colOrder: JSON.parse(localStorage.getItem("tse-stock-col-order") || JSON.stringify(MOVABLE_KEYS)),
 };
 
 function saveColState() {
   localStorage.setItem("tse-stock-hide", JSON.stringify([...state.hiddenToggles]));
-  localStorage.setItem("tse-stock-tgl-order", JSON.stringify(state.toggleOrder));
+  localStorage.setItem("tse-stock-col-order", JSON.stringify(state.colOrder));
 }
 
 function visibleCols() {
-  // Build ordered list of visible columns
+  const orderMap = new Map(state.colOrder.map((k, i) => [k, i]));
+  const byCol = new Map(ALL_COLS.map(c => [c.k, c]));
   const result = [];
-  const tgOrder = new Map(state.toggleOrder.map((t, i) => [t, i]));
   for (const col of ALL_COLS) {
-    if (col.fixed) { result.push(col); continue; }
-    if (!state.hiddenToggles.has(col.toggle)) result.push(col);
+    if (!col.movable) { result.push(col); continue; }
+    if (col.toggle && state.hiddenToggles.has(col.toggle)) continue;
+    result.push(col);
   }
-  // Reorder toggleable columns according to toggleOrder
-  const fixed = result.filter(c => c.fixed);
-  const tg = result.filter(c => !c.fixed);
-  tg.sort((a, b) => (tgOrder.get(a.toggle) ?? 99) - (tgOrder.get(b.toggle) ?? 99));
-  return [...fixed, ...tg];
+  result.sort((a, b) => {
+    if (!a.movable && !b.movable) return 0;
+    if (!a.movable) return -1;
+    if (!b.movable) return 1;
+    return (orderMap.get(a.k) ?? 999) - (orderMap.get(b.k) ?? 999);
+  });
+  return result;
 }
 
 // ===== ウィンドウ =====
@@ -155,8 +162,8 @@ function exportCSV() {
 
 // ===== 全カラム切替 =====
 toggleAllBtn.addEventListener("click", () => {
-  const allHidden = state.hiddenToggles.size === state.toggleOrder.length;
-  if (allHidden) { state.hiddenToggles.clear(); } else { state.toggleOrder.forEach(t => state.hiddenToggles.add(t)); }
+  const allHidden = state.hiddenToggles.size >= TOGGLE_KEYS.size;
+  if (allHidden) { state.hiddenToggles.clear(); } else { TOGGLE_KEYS.forEach(t => state.hiddenToggles.add(t)); }
   saveColState();
   render();
 });
@@ -167,9 +174,9 @@ tableHeader.addEventListener("click", e => {
   // ◀▶ column reorder
   const arw = e.target.closest(".col-arrow");
   if (arw) {
-    const tgl = arw.dataset.tgl, dir = arw.dataset.dir, i = state.toggleOrder.indexOf(tgl);
-    if (dir === "left" && i > 0) { [state.toggleOrder[i - 1], state.toggleOrder[i]] = [state.toggleOrder[i], state.toggleOrder[i - 1]]; saveColState(); render(); }
-    if (dir === "right" && i < state.toggleOrder.length - 1) { [state.toggleOrder[i], state.toggleOrder[i + 1]] = [state.toggleOrder[i + 1], state.toggleOrder[i]]; saveColState(); render(); }
+    const key = arw.dataset.key, dir = arw.dataset.dir, i = state.colOrder.indexOf(key);
+    if (dir === "left" && i > 0) { [state.colOrder[i - 1], state.colOrder[i]] = [state.colOrder[i], state.colOrder[i - 1]]; saveColState(); render(); }
+    if (dir === "right" && i < state.colOrder.length - 1) { [state.colOrder[i], state.colOrder[i + 1]] = [state.colOrder[i + 1], state.colOrder[i]]; saveColState(); render(); }
     return;
   }
   const sp = e.target.closest("span"); if (!sp) return;
@@ -201,7 +208,7 @@ function render() {
   // header with ◀▶ for toggleable cols
   tableHeader.innerHTML = cols.map((c, ci) => {
     const sortCls = c.k === "code" ? " col-code sortable" : c.k === "name" ? " col-name sortable" : c.k === "price" ? " col-price sortable" : c.k === "change" ? " col-change sortable" : c.k === "open" ? " col-open sortable" : c.k === "volume" ? " col-volume sortable" : c.k === "rsi" ? " col-rsi sortable" : "";
-    const tgBtns = c.toggle ? `<button class="col-arrow col-left" data-tgl="${c.toggle}" data-dir="left">◀</button><button class="col-arrow col-right" data-tgl="${c.toggle}" data-dir="right">▶</button>` : "";
+    const tgBtns = c.movable ? `<button class="col-arrow col-left" data-key="${c.k}" data-dir="left">◀</button><button class="col-arrow col-right" data-key="${c.k}" data-dir="right">▶</button>` : "";
     return `<span class="${c.k === "reorder" ? "col-reorder" : ""}${sortCls}">${tgBtns}${c.label}</span>`;
   }).join("");
 
