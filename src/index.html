@@ -17,10 +17,27 @@
         <div id="tabs"></div>
         <button id="add-tab-btn" title="新規タブ">+</button>
       </div>
+      <div id="index-display">
+        <span id="idx-n225" class="idx-item">日経 ---</span>
+        <span id="idx-topx" class="idx-item">TOPIX ---</span>
+      </div>
       <div id="add-stock">
         <input type="text" id="stock-code-input" placeholder="銘柄コード（例: 7203）" />
         <button id="add-btn">追加</button>
         <button id="pause-btn" title="自動更新の停止/再開">⏸</button>
+        <button id="export-btn" title="CSVエクスポート">📥</button>
+        <button id="cols-btn" title="カラム表示切替">⚙</button>
+      </div>
+      <div id="cols-menu" class="hidden">
+        <label><input type="checkbox" data-col="col-spark" checked>5日</label>
+        <label><input type="checkbox" data-col="col-change" checked>前日比</label>
+        <label><input type="checkbox" data-col="col-prev" checked>前日終値</label>
+        <label><input type="checkbox" data-col="col-hl" checked>高値/安値</label>
+        <label><input type="checkbox" data-col="col-volume" checked>出来高</label>
+        <label><input type="checkbox" data-col="col-ma" checked>MA</label>
+        <label><input type="checkbox" data-col="col-ind" checked>MACD</label>
+        <label><input type="checkbox" data-col="col-rsi" checked>RSI</label>
+        <label><input type="checkbox" data-col="col-score" checked>判定</label>
       </div>
       <div id="status-msg"></div>
     </div>

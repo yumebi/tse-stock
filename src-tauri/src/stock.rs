@@ -752,6 +752,44 @@ fn check_signals(
     sigs
 }
 
+// ===== 指数データ =====
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexData {
+    pub name: String,
+    pub price: f64,
+    pub change: f64,
+    pub change_percent: f64,
+}
+
+pub async fn fetch_index(app_handle: &tauri::AppHandle, symbol: &str) -> Result<IndexData, String> {
+    use tauri::Emitter;
+    let _ = app_handle.emit("stock-progress", serde_json::json!({ "code": symbol, "step": "指数取得中..." }));
+
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let url = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}?interval=1d&range=1d", symbol);
+    let resp = client.get(&url).send().await.map_err(|e| format!("Request error: {}", e))?;
+    let data: YahooResponse = resp.json().await.map_err(|e| format!("Parse error: {}", e))?;
+    let chart = data.chart;
+    if let Some(err) = chart.error { return Err(format!("API error: {:?}", err)); }
+    let result = chart.result.and_then(|mut r| r.pop()).ok_or("No data")?;
+    let meta = result.meta;
+
+    let price = meta.regular_market_price.unwrap_or(0.0);
+    let prev_close = meta.previous_close.or(meta.chart_previous_close).unwrap_or(price);
+    let change = price - prev_close;
+    let change_percent = if prev_close != 0.0 { (change / prev_close) * 100.0 } else { 0.0 };
+    let name = meta.long_name.or(meta.short_name).unwrap_or_else(|| symbol.to_string());
+
+    Ok(IndexData { name, price: round2(price), change: round2(change), change_percent: round2(change_percent) })
+}
+
 // ===== ヘルパー =====
 
 fn round2(v: f64) -> f64 {
