@@ -79,7 +79,7 @@ const stockCodeInput = document.getElementById("stock-code-input");
 const addBtn = document.getElementById("add-btn");
 const pauseBtn = document.getElementById("pause-btn");
 const exportBtn = document.getElementById("export-btn");
-const toggleAllBtn = document.getElementById("toggle-all-btn");
+
 const statusMsg = document.getElementById("status-msg");
 const tableHeader = document.querySelector(".table-header");
 const tabsEl = document.getElementById("tabs");
@@ -159,14 +159,6 @@ function exportCSV() {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `tse-stock-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
   setStatus("CSVエクスポート完了", false);
 }
-
-// ===== 全カラム切替 =====
-toggleAllBtn.addEventListener("click", () => {
-  const allHidden = state.hiddenToggles.size >= TOGGLE_KEYS.size;
-  if (allHidden) { state.hiddenToggles.clear(); } else { TOGGLE_KEYS.forEach(t => state.hiddenToggles.add(t)); }
-  saveColState();
-  render();
-});
 
 // ===== ソート / カラム移動 =====
 const SORT_KEYS = { "col-code": { key: "code" }, "col-name": { key: "nameJa" }, "col-price": { key: "price" }, "col-change": { key: "change" }, "col-open": { key: "open" }, "col-volume": { key: "volume" }, "col-rsi": { key: "rsi" } };

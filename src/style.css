@@ -40,8 +40,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 .idx-item .down { color: var(--accent-red); }
 
 /* エクスポート・設定ボタン */
-#export-btn, #toggle-all-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
-#export-btn:hover, #toggle-all-btn:hover { color: var(--text-primary); background: var(--button-hover); }
+#export-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+#export-btn:hover { color: var(--text-primary); background: var(--button-hover); }
 
 /* 非表示カラム */
 .col-spark.hidden-col, .col-change.hidden-col, .col-prev.hidden-col, .col-hl.hidden-col, .col-volume.hidden-col, .col-ma.hidden-col, .col-ind.hidden-col, .col-rsi.hidden-col, .col-score.hidden-col { display: none; }
