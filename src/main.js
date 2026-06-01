@@ -1,12 +1,79 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // ===== 状態 =====
 const state = {
   stocks: [],
   sortKey: null,
   sortAsc: true,
+  prevSignals: {}, // {code: signalsHash} for sound notification dedup
 };
+
+// ===== ウィンドウ =====
+const win = getCurrentWindow();
+const WIN_KEY = "tse-stock-window";
+
+async function restoreWindow() {
+  try {
+    const raw = localStorage.getItem(WIN_KEY);
+    if (!raw) return;
+    const { x, y, w, h } = JSON.parse(raw);
+    if (x != null && y != null) await win.setPosition({ x, y });
+    if (w > 400 && h > 300) await win.setSize({ width: w, height: h });
+  } catch (_) {}
+}
+
+function saveWindowPos() {
+  Promise.all([win.outerPosition(), win.outerSize()]).then(([pos, size]) => {
+    localStorage.setItem(WIN_KEY, JSON.stringify({
+      x: pos.x, y: pos.y, w: size.width, h: size.height
+    }));
+  }).catch(() => {});
+}
+
+// ===== 音声 =====
+let audioCtx = null;
+function beep(freq, duration, type = "sine") {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch (_) {}
+}
+
+function signalBeep(isBuy) {
+  if (isBuy) {
+    beep(880, 0.15, "sine");
+    setTimeout(() => beep(1100, 0.2, "sine"), 150);
+  } else {
+    beep(440, 0.15, "sawtooth");
+    setTimeout(() => beep(330, 0.25, "sawtooth"), 150);
+  }
+}
+
+function hashSignals(signals) {
+  return (signals || []).join("|") || "_empty";
+}
+
+function detectNewSignals(code, newSignals) {
+  const oldHash = state.prevSignals[code] || "_init";
+  const newHash = hashSignals(newSignals);
+  if (oldHash === "_init") return;
+  if (oldHash === newHash) return;
+  state.prevSignals[code] = newHash;
+
+  const buying = newSignals.some(s => s.includes("買い") || s.includes("GC") || s.includes("上抜"));
+  signalBeep(buying);
+}
 
 // ===== DOM =====
 const stockList = document.getElementById("stock-list");
@@ -61,6 +128,17 @@ function sparkline(closes) {
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+// ===== 出来高ヒートマップ =====
+function volumeClass(s) {
+  if (!s._volAvg || s._volAvg <= 0) return "";
+  const ratio = s.volume / s._volAvg;
+  if (ratio >= 3) return "vol-hot3";
+  if (ratio >= 2) return "vol-hot2";
+  if (ratio >= 1.5) return "vol-hot1";
+  if (ratio >= 1) return "vol-normal";
+  return "vol-cold";
+}
+
 // ===== ソート =====
 const SORT_KEYS = {
   "col-code":    { key: "code",         type: "string" },
@@ -101,6 +179,9 @@ function sortStocks(arr) {
   });
 }
 
+// ===== 価格フラッシュ =====
+const priceFlash = {}; // {code: "up"|"down"}
+
 // ===== レンダリング =====
 function render() {
   if (state.stocks.length === 0) {
@@ -120,6 +201,8 @@ function render() {
       : s.name;
     const isFirst = i === 0;
     const isLast = i === sorted.length - 1;
+    const flash = priceFlash[s.code];
+    const flashClass = flash ? `flash-${flash}` : "";
 
     return `
       <div class="stock-row" data-code="${s.code}">
@@ -129,14 +212,14 @@ function render() {
         </span>
         <span class="cell-code">${s.code}</span>
         <span class="cell-name" title="${nameJa || s.name}">${nameDisplay}</span>
-        <span class="cell-price">¥${fmt(s.price)}</span>
+        <span class="cell-price ${flashClass}">¥${fmt(s.price)}</span>
         <span class="cell-spark">${sparkline(s.recentCloses)}</span>
         <span class="cell-change ${up ? "up" : "down"}">${fmtPct(s.changePercent)} (${fmt(s.change)})</span>
         <span class="cell-prev">¥${fmt(s.prevClose)}</span>
         <span class="cell-open">¥${fmt(s.open)}</span>
         <span class="cell-hl">¥${fmt(s.high)}${s.highTime ? `<span class="time">${s.highTime}</span>` : ""}</span>
         <span class="cell-hl">¥${fmt(s.low)}${s.lowTime ? `<span class="time">${s.lowTime}</span>` : ""}</span>
-        <span class="cell-volume">${fmt(s.volume)}</span>
+        <span class="cell-volume ${volumeClass(s)}">${fmt(s.volume)}</span>
         <span class="cell-ma ma5">${fmtOpt(s.ma5)}</span>
         <span class="cell-ma ma25">${fmtOpt(s.ma25)}</span>
         <span class="cell-ma ma75">${fmtOpt(s.ma75)}</span>
@@ -147,6 +230,9 @@ function render() {
         <span class="cell-del"><button class="del-btn" data-code="${s.code}">×</button></span>
       </div>`;
   }).join("");
+
+  // フラッシュをクリア
+  for (const code of Object.keys(priceFlash)) delete priceFlash[code];
 
   // ソートインジケーター
   tableHeader.querySelectorAll("span").forEach(span => span.classList.remove("sort-asc", "sort-desc"));
@@ -204,6 +290,7 @@ async function addStock(code) {
       nameCache[code] = data.nameJa;
       saveNameCache(nameCache);
     }
+    data._volAvg = data.volume;
     state.stocks.push(data);
     saveStockCodes();
     render();
@@ -215,6 +302,7 @@ async function addStock(code) {
 
 function removeStock(code) {
   state.stocks = state.stocks.filter(s => s.code !== code);
+  delete state.prevSignals[code];
   saveStockCodes();
   render();
 }
@@ -230,10 +318,10 @@ stockCodeInput.addEventListener("keydown", e => { if (e.key === "Enter") addBtn.
 
 // ===== 初期化 =====
 async function init() {
+  restoreWindow();
   const savedCodes = loadStockCodes();
   const codes = savedCodes || DEFAULT_STOCKS;
   for (const code of codes) {
-    // 進捗はイベントで表示されるので、ここでは最小限に
     try {
       const data = await invoke("fetch_stock_cmd", { code });
       const nameCache = getNameCache();
@@ -241,7 +329,9 @@ async function init() {
         nameCache[code] = data.nameJa;
         saveNameCache(nameCache);
       }
+      data._volAvg = data.volume;
       state.stocks.push(data);
+      state.prevSignals[code] = hashSignals(data.signals);
     } catch (e) { setStatus(`${code} 失敗: ${e}`, true); }
   }
   saveStockCodes();
@@ -254,14 +344,36 @@ setInterval(async () => {
   if (state.stocks.length === 0) return;
   for (const stock of state.stocks) {
     try {
+      const oldPrice = stock.price;
       const data = await invoke("fetch_stock_cmd", { code: stock.code });
       const prevNameJa = stock.nameJa;
       Object.assign(stock, data);
       if (!stock.nameJa && prevNameJa) stock.nameJa = prevNameJa;
+
+      // 出来高平均更新（EMA）
+      if (!stock._volAvg) stock._volAvg = stock.volume;
+      else stock._volAvg = stock._volAvg * 0.9 + stock.volume * 0.1;
+
+      // フラッシュ
+      if (data.price > oldPrice) priceFlash[stock.code] = "up";
+      else if (data.price < oldPrice) priceFlash[stock.code] = "down";
+
+      // シグナル音声
+      detectNewSignals(stock.code, data.signals);
     } catch (_) {}
   }
   render();
 }, 30000);
+
+// ===== ウィンドウ保存 =====
+let saveTimer;
+async function onWindowChange() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveWindowPos, 500);
+}
+
+win.onResized(onWindowChange);
+win.onMoved(onWindowChange);
 
 // ===== 進捗イベント =====
 listen("stock-progress", (e) => {

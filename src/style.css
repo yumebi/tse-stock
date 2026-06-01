@@ -70,7 +70,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 .cell-name .ja { color: var(--text-primary); font-size: 0.95em; display: block; }
 .cell-name .en { color: var(--text-muted); font-size: 0.78em; display: block; }
 
-.cell-price { font-weight: 700; font-size: 1.02em; }
+.cell-price { font-weight: 700; font-size: 1.02em; transition: background-color 0.3s; }
+
+/* 価格フラッシュ */
+.flash-up { animation: flashGreen 0.8s ease-out; }
+.flash-down { animation: flashRed 0.8s ease-out; }
+@keyframes flashGreen {
+  0% { background-color: rgba(63,185,80,0.4); }
+  100% { background-color: transparent; }
+}
+@keyframes flashRed {
+  0% { background-color: rgba(248,81,73,0.4); }
+  100% { background-color: transparent; }
+}
+
+/* 出来高ヒートマップ */
+.cell-volume.vol-cold { color: #484f58; }
+.cell-volume.vol-normal { color: var(--text-secondary); }
+.cell-volume.vol-hot1 { color: #d2991d; }
+.cell-volume.vol-hot2 { color: #f0883e; font-weight: 600; }
+.cell-volume.vol-hot3 { color: #f85149; font-weight: 700; }
 .cell-spark { display: flex; align-items: center; justify-content: center; }
 .cell-spark svg { display: block; }
 .cell-change { font-weight: 600; }
