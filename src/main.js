@@ -194,11 +194,13 @@ function buildColsMenu() {
   });
 }
 
-colsBtn.addEventListener("click", () => {
+colsBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const wasHidden = colsMenu.classList.contains("hidden");
   colsMenu.classList.toggle("hidden");
-  if (!colsMenu.classList.contains("hidden")) buildColsMenu();
+  if (wasHidden) buildColsMenu();
 });
-document.addEventListener("click", e => { if (!colsBtn.contains(e.target) && !colsMenu.contains(e.target)) colsMenu.classList.add("hidden"); });
+document.addEventListener("click", () => { if (!colsMenu.classList.contains("hidden")) colsMenu.classList.add("hidden"); });
 
 // ===== ソート =====
 const SORT_KEYS = { "col-code": { key: "code" }, "col-name": { key: "nameJa" }, "col-price": { key: "price" }, "col-change": { key: "change" }, "col-open": { key: "open" }, "col-volume": { key: "volume" }, "col-rsi": { key: "rsi" } };
