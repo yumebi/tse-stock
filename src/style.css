@@ -47,11 +47,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 #cols-menu { position: absolute; top: 100%; right: 8px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; z-index: 50; font-size: 0.78em; }
 #cols-menu.hidden { display: none; }
 .cols-header { font-size: 0.9em; color: var(--text-primary); margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--border-color); }
-.col-item { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: grab; padding: 2px 4px; border-radius: 3px; user-select: none; }
-.col-item:hover { color: var(--text-primary); background: var(--bg-tertiary); }
-.col-item.dragging { opacity: 0.4; }
-.col-item.drag-over { border-top: 2px solid var(--accent-blue); }
-.drag-handle { font-size: 0.9em; color: var(--text-muted); cursor: grab; margin-right: 2px; }
+.col-item { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); padding: 2px 4px; border-radius: 3px; }
+.col-item:hover { background: var(--bg-tertiary); }
+.col-reorder-btns { display: flex; flex-direction: column; gap: 0; }
+.col-reorder-btns button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.55em; padding: 0 2px; line-height: 1; }
+.col-reorder-btns button:hover { color: var(--text-primary); }
+.col-reorder-btns button:disabled { opacity: 0.2; cursor: default; }
 #cols-menu input[type=checkbox] { accent-color: var(--accent-blue); cursor: pointer; }
 
 /* 非表示カラム */

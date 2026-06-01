@@ -2,14 +2,55 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+// ===== カラム定義 =====
+const ALL_COLS = [
+  { k: "reorder", w: "48px", label: "", fixed: true },
+  { k: "code", w: "70px", label: "コード", fixed: true },
+  { k: "name", w: "0.7fr", label: "企業名", fixed: true },
+  { k: "price", w: "105px", label: "現在株価", fixed: true },
+  { k: "spark", w: "70px", label: "5日", toggle: "spark" },
+  { k: "change", w: "120px", label: "前日比", toggle: "change" },
+  { k: "prev", w: "105px", label: "前日終値", toggle: "prev" },
+  { k: "open", w: "100px", label: "始値", fixed: true },
+  { k: "high", w: "95px", label: "高値", toggle: "hl" },
+  { k: "low", w: "95px", label: "安値", toggle: "hl" },
+  { k: "volume", w: "80px", label: "出来高", toggle: "volume" },
+  { k: "ma5", w: "72px", label: "MA5", toggle: "ma" },
+  { k: "ma25", w: "72px", label: "MA25", toggle: "ma" },
+  { k: "ma75", w: "72px", label: "MA75", toggle: "ma" },
+  { k: "macd", w: "68px", label: "MACD", toggle: "ind" },
+  { k: "sig", w: "55px", label: "Sig", toggle: "ind" },
+  { k: "rsi", w: "52px", label: "RSI", toggle: "rsi" },
+  { k: "score", w: "58px", label: "判定", toggle: "score" },
+  { k: "signals", w: "1fr", label: "シグナル", fixed: true },
+  { k: "del", w: "28px", label: "", fixed: true },
+];
+
 // ===== 状態 =====
 const state = {
   tabs: [], activeTabIdx: 0, sortKey: null, sortAsc: true, paused: false, prevSignals: {},
-  hiddenCols: new Set(JSON.parse(localStorage.getItem("tse-stock-cols") || "[]")),
+  hiddenToggles: new Set(JSON.parse(localStorage.getItem("tse-stock-hide") || "[]")),
+  toggleOrder: JSON.parse(localStorage.getItem("tse-stock-tgl-order") || '["spark","change","prev","hl","volume","ma","ind","rsi","score"]'),
 };
 
 function saveColState() {
-  localStorage.setItem("tse-stock-cols", JSON.stringify([...state.hiddenCols]));
+  localStorage.setItem("tse-stock-hide", JSON.stringify([...state.hiddenToggles]));
+  localStorage.setItem("tse-stock-tgl-order", JSON.stringify(state.toggleOrder));
+}
+
+function visibleCols() {
+  // Build ordered list of visible columns
+  const result = [];
+  const tgOrder = new Map(state.toggleOrder.map((t, i) => [t, i]));
+  for (const col of ALL_COLS) {
+    if (col.fixed) { result.push(col); continue; }
+    if (!state.hiddenToggles.has(col.toggle)) result.push(col);
+  }
+  // Reorder toggleable columns according to toggleOrder
+  const fixed = result.filter(c => c.fixed);
+  const tg = result.filter(c => !c.fixed);
+  tg.sort((a, b) => (tgOrder.get(a.toggle) ?? 99) - (tgOrder.get(b.toggle) ?? 99));
+  return [...fixed, ...tg];
 }
 
 // ===== ウィンドウ =====
@@ -60,32 +101,39 @@ function scoreSignals(sigs) { let buy = 0, sell = 0; for (const s of sigs || [])
 function scoreClass(sigs) { const { buy, sell } = scoreSignals(sigs); const net = buy - sell; if (net > 0) return "bullish"; if (net < 0) return "bearish"; return "neutral"; }
 function scoreText(sigs) { const { buy, sell } = scoreSignals(sigs); if (buy === 0 && sell === 0) return "-"; return `🟢${buy} 🔴${sell}`; }
 
-// ===== カラム可視性 =====
-const COL_MAP = {
-  spark: 4, change: 5, prev: 6, hl: 8, volume: 10, ma: 11, ind: 14, rsi: 16, score: 17,
-  hl2: 9, ma2: 12, ma3: 13, ind2: 15,
-};
-
-function applyColVisibility() {
-  const idxs = new Set();
-  for (const key of state.hiddenCols) {
-    if (COL_MAP[key] != null) idxs.add(COL_MAP[key]);
-    // hl covers both 8 and 9
-    if (key === "hl") { idxs.add(8); idxs.add(9); }
-    if (key === "ma") { idxs.add(11); idxs.add(12); idxs.add(13); }
-    if (key === "ind") { idxs.add(14); idxs.add(15); }
+// ===== セル生成 =====
+function renderCell(s, k, fl) {
+  const up = s.change >= 0, rsiC = s.rsi != null ? (s.rsi > 70 ? "over" : s.rsi < 30 ? "under" : "") : "";
+  switch (k) {
+    case "reorder": return `<span class="cell-reorder"><button class="reorder-btn up" data-code="${s.code}">▲</button><button class="reorder-btn down" data-code="${s.code}">▼</button></span>`;
+    case "code": return `<span class="cell-code">${s.code}</span>`;
+    case "name": {
+      const nc = getNameCache(); const nJ = nc[s.code] || s.nameJa;
+      const nm = nJ ? `<span class="ja">${nJ}</span><span class="en">${s.name}</span>` : s.name;
+      return `<span class="cell-name" title="${nJ || s.name}">${nm}</span>`;
+    }
+    case "price": return `<span class="cell-price ${fl}">¥${fmt(s.price)}</span>`;
+    case "spark": return `<span class="cell-spark">${sparkline(s.recentCloses)}</span>`;
+    case "change": return `<span class="cell-change ${up ? "up" : "down"} ${gradClass(s.changePercent)}">${fmtPct(s.changePercent)} (${fmt(s.change)})</span>`;
+    case "prev": return `<span class="cell-prev">¥${fmt(s.prevClose)}</span>`;
+    case "open": return `<span class="cell-open">¥${fmt(s.open)}</span>`;
+    case "high": return `<span class="cell-hl">¥${fmt(s.high)}${s.highTime ? `<span class="time">${s.highTime}</span>` : ""}</span>`;
+    case "low": return `<span class="cell-hl">¥${fmt(s.low)}${s.lowTime ? `<span class="time">${s.lowTime}</span>` : ""}</span>`;
+    case "volume": return `<span class="cell-volume ${volClass(s)}">${fmt(s.volume)}</span>`;
+    case "ma5": return `<span class="cell-ma ma5">${fmtOpt(s.ma5)}</span>`;
+    case "ma25": return `<span class="cell-ma ma25">${fmtOpt(s.ma25)}</span>`;
+    case "ma75": return `<span class="cell-ma ma75">${fmtOpt(s.ma75)}</span>`;
+    case "macd": return `<span class="cell-ind">${fmtOpt(s.macd)}</span>`;
+    case "sig": return `<span class="cell-ind">${fmtOpt(s.macdSignal)}</span>`;
+    case "rsi": return `<span class="cell-rsi ${rsiC}">${fmtOpt(s.rsi)}</span>`;
+    case "score": return `<span class="cell-score ${scoreClass(s.signals)}">${scoreText(s.signals)}</span>`;
+    case "signals": return `<span class="cell-sig">${s.signals?.length ? `<span class="sig-inner">${s.signals.join(" ⏺ ")} ⏺ ${s.signals.join(" ⏺ ")}</span>` : ""}</span>`;
+    case "del": return `<span class="cell-del"><button class="del-btn" data-code="${s.code}">×</button></span>`;
   }
-  // header (20 cols)
-  const hSpans = tableHeader.querySelectorAll("span");
-  hSpans.forEach((sp, i) => { sp.style.display = idxs.has(i) ? "none" : ""; });
-  // rows
-  stockList.querySelectorAll(".stock-row").forEach(row => {
-    const cells = row.querySelectorAll("span");
-    cells.forEach((cell, i) => { cell.style.display = idxs.has(i) ? "none" : ""; });
-  });
+  return "";
 }
 
-// ===== stocks参照 =====
+// ===== stocks =====
 function stocks() { return state.tabs[state.activeTabIdx]?.stocks || []; }
 function setStocks(arr) { if (state.tabs[state.activeTabIdx]) state.tabs[state.activeTabIdx].stocks = arr; }
 
@@ -95,7 +143,7 @@ async function fetchIndices() {
   try { const topx = await invoke("fetch_index_cmd", { symbol: "^TOPX" }); idxTopx.innerHTML = `TOPIX ${topx.price.toLocaleString()} <span class="${topx.change >= 0 ? 'up' : 'down'}">${topx.change >= 0 ? '+' : ''}${topx.changePercent.toFixed(2)}%</span>`; } catch (_) { idxTopx.innerHTML = "TOPIX ---"; }
 }
 
-// ===== CSVエクスポート =====
+// ===== CSV =====
 function exportCSV() {
   const arr = stocks(); if (arr.length === 0) return;
   const headers = ["コード", "企業名", "現在株価", "前日比%", "前日比", "前日終値", "始値", "高値", "安値", "出来高", "MA5", "MA25", "MA75", "MACD", "Sig", "RSI", "判定"];
@@ -106,27 +154,50 @@ function exportCSV() {
   setStatus("CSVエクスポート完了", false);
 }
 
-// ===== カラム切替 + DnD並び替え =====
+// ===== カラムメニュー =====
+const TOGGLE_LABELS = { spark: "5日", change: "前日比", prev: "前日終値", hl: "高値/安値", volume: "出来高", ma: "MA(5/25/75)", ind: "MACD/Sig", rsi: "RSI", score: "判定" };
+
+function buildColsMenu() {
+  const items = state.toggleOrder.map(t => {
+    const checked = !state.hiddenToggles.has(t);
+    return `<div class="col-item">
+      <button class="tgl-up" data-tgl="${t}">▲</button>
+      <button class="tgl-down" data-tgl="${t}">▼</button>
+      <input type="checkbox" data-tgl="${t}" ${checked ? "checked" : ""}>
+      <span>${TOGGLE_LABELS[t] || t}</span>
+    </div>`;
+  }).join("");
+  colsMenu.innerHTML = `<div class="cols-header">カラム切替・並び替え</div>${items}`;
+
+  // checkbox change
+  colsMenu.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (cb.checked) state.hiddenToggles.delete(cb.dataset.tgl);
+      else state.hiddenToggles.add(cb.dataset.tgl);
+      saveColState();
+      render();
+    });
+  });
+  // move up
+  colsMenu.querySelectorAll(".tgl-up").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const t = btn.dataset.tgl, i = state.toggleOrder.indexOf(t);
+      if (i > 0) { [state.toggleOrder[i - 1], state.toggleOrder[i]] = [state.toggleOrder[i], state.toggleOrder[i - 1]]; saveColState(); render(); buildColsMenu(); }
+    });
+  });
+  // move down
+  colsMenu.querySelectorAll(".tgl-down").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const t = btn.dataset.tgl, i = state.toggleOrder.indexOf(t);
+      if (i < state.toggleOrder.length - 1) { [state.toggleOrder[i], state.toggleOrder[i + 1]] = [state.toggleOrder[i + 1], state.toggleOrder[i]]; saveColState(); render(); buildColsMenu(); }
+    });
+  });
+}
+
 colsBtn.addEventListener("click", () => {
   colsMenu.classList.toggle("hidden");
-  if (!colsMenu.classList.contains("hidden")) {
-    // sync checkboxes
-    colsMenu.querySelectorAll("input[type=checkbox]").forEach(cb => {
-      cb.checked = !state.hiddenCols.has(cb.dataset.col);
-    });
-  }
+  if (!colsMenu.classList.contains("hidden")) buildColsMenu();
 });
-
-colsMenu.addEventListener("change", e => {
-  if (e.target.type === "checkbox" && e.target.dataset.col) {
-    const col = e.target.dataset.col;
-    if (e.target.checked) state.hiddenCols.delete(col);
-    else state.hiddenCols.add(col);
-    saveColState();
-    applyColVisibility();
-  }
-});
-
 document.addEventListener("click", e => { if (!colsBtn.contains(e.target) && !colsMenu.contains(e.target)) colsMenu.classList.add("hidden"); });
 
 // ===== ソート =====
@@ -135,60 +206,55 @@ tableHeader.addEventListener("click", e => {
   const sp = e.target.closest("span"); if (!sp) return;
   const cls = [...sp.classList].find(c => SORT_KEYS[c]); if (!cls || !SORT_KEYS[cls].key) return;
   const sk = SORT_KEYS[cls];
-  state.sortKey = state.sortKey === sk.key ? state.sortKey : sk.key;
-  state.sortAsc = state.sortKey === sk.key ? !state.sortAsc : true;
+  if (state.sortKey === sk.key) state.sortAsc = !state.sortAsc;
+  else { state.sortKey = sk.key; state.sortAsc = true; }
   render();
 });
 function sortArr(arr) { if (!state.sortKey) return arr; const k = state.sortKey, asc = state.sortAsc; return [...arr].sort((a, b) => { let va = a[k], vb = b[k]; if (va == null) va = asc ? "\uffff" : ""; if (vb == null) vb = asc ? "\uffff" : ""; if (typeof va === "string") return asc ? va.localeCompare(vb, "ja") : vb.localeCompare(va, "ja"); return asc ? va - vb : vb - va; }); }
 
 // ===== タブ =====
 function renderTabs() { tabsEl.innerHTML = state.tabs.map((t, i) => `<button class="tab-btn${i === state.activeTabIdx ? " active" : ""}" data-idx="${i}">${t.name}${state.tabs.length > 1 ? `<span class="tab-del" data-idx="${i}">×</span>` : ""}</button>`).join(""); tabsEl.querySelectorAll(".tab-btn").forEach(b => { b.addEventListener("click", e => { if (e.target.classList.contains("tab-del")) { deleteTab(parseInt(e.target.dataset.idx)); return; } switchTab(parseInt(b.dataset.idx)); }); }); }
-function switchTab(idx) { state.activeTabIdx = idx; state.sortKey = null; state.sortAsc = true; saveAll(); renderTabs(); render(); applyColVisibility(); }
-function addTab() { const name = `リスト${state.tabs.length + 1}`; state.tabs.push({ name, stocks: [] }); state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); applyColVisibility(); }
-function deleteTab(idx) { if (state.tabs.length <= 1) return; state.tabs.splice(idx, 1); if (state.activeTabIdx >= state.tabs.length) state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); applyColVisibility(); }
+function switchTab(idx) { state.activeTabIdx = idx; state.sortKey = null; state.sortAsc = true; saveAll(); renderTabs(); render(); }
+function addTab() { const name = `リスト${state.tabs.length + 1}`; state.tabs.push({ name, stocks: [] }); state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); }
+function deleteTab(idx) { if (state.tabs.length <= 1) return; state.tabs.splice(idx, 1); if (state.activeTabIdx >= state.tabs.length) state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); }
 
 // ===== レンダリング =====
 const priceFlash = {};
 
-function rowHtml(s, i, sorted) {
-  const up = s.change >= 0, rsiC = s.rsi != null ? (s.rsi > 70 ? "over" : s.rsi < 30 ? "under" : "") : "";
-  const nameCache = getNameCache();
-  const nameJa = nameCache[s.code] || s.nameJa;
-  const nm = nameJa ? `<span class="ja">${nameJa}</span><span class="en">${s.name}</span>` : s.name;
-  const isF = i === 0, isL = i === sorted.length - 1, fl = priceFlash[s.code] || "";
-
-  const cells = [
-    `<span class="cell-reorder"><button class="reorder-btn up" data-code="${s.code}" ${isF ? "disabled" : ""}>▲</button><button class="reorder-btn down" data-code="${s.code}" ${isL ? "disabled" : ""}>▼</button></span>`,
-    `<span class="cell-code">${s.code}</span>`,
-    `<span class="cell-name" title="${nameJa || s.name}">${nm}</span>`,
-    `<span class="cell-price ${fl ? "flash-" + fl : ""}">¥${fmt(s.price)}</span>`,
-    `<span class="cell-spark">${sparkline(s.recentCloses)}</span>`,
-    `<span class="cell-change ${up ? "up" : "down"} ${gradClass(s.changePercent)}">${fmtPct(s.changePercent)} (${fmt(s.change)})</span>`,
-    `<span class="cell-prev">¥${fmt(s.prevClose)}</span>`,
-    `<span class="cell-open">¥${fmt(s.open)}</span>`,
-    `<span class="cell-hl">¥${fmt(s.high)}${s.highTime ? `<span class="time">${s.highTime}</span>` : ""}</span>`,
-    `<span class="cell-hl">¥${fmt(s.low)}${s.lowTime ? `<span class="time">${s.lowTime}</span>` : ""}</span>`,
-    `<span class="cell-volume ${volClass(s)}">${fmt(s.volume)}</span>`,
-    `<span class="cell-ma ma5">${fmtOpt(s.ma5)}</span>`,
-    `<span class="cell-ma ma25">${fmtOpt(s.ma25)}</span>`,
-    `<span class="cell-ma ma75">${fmtOpt(s.ma75)}</span>`,
-    `<span class="cell-ind">${fmtOpt(s.macd)}</span>`,
-    `<span class="cell-ind">${fmtOpt(s.macdSignal)}</span>`,
-    `<span class="cell-rsi ${rsiC}">${fmtOpt(s.rsi)}</span>`,
-    `<span class="cell-score ${scoreClass(s.signals)}">${scoreText(s.signals)}</span>`,
-    `<span class="cell-sig">${s.signals?.length ? `<span class="sig-inner">${s.signals.join(" ⏺ ")} ⏺ ${s.signals.join(" ⏺ ")}</span>` : ""}</span>`,
-    `<span class="cell-del"><button class="del-btn" data-code="${s.code}">×</button></span>`,
-  ];
-  return `<div class="stock-row" data-code="${s.code}">${cells.join("")}</div>`;
-}
-
 function render() {
   const stks = stocks();
-  if (stks.length === 0) { stockList.innerHTML = `<div class="empty-state">銘柄がありません。上の入力欄からコードを追加してください。</div>`; return; }
+  if (stks.length === 0) { stockList.innerHTML = `<div class="empty-state">銘柄がありません。上の入力欄からコードを追加してください。</div>`; tableHeader.style.gridTemplateColumns = ""; return; }
+
+  const cols = visibleCols();
+  const gridTpl = cols.map(c => c.w).join(" ");
+  tableHeader.style.gridTemplateColumns = gridTpl;
+
+  // header
+  tableHeader.innerHTML = cols.map(c => {
+    const sortCls = c.k === "code" ? " col-code sortable" : c.k === "name" ? " col-name sortable" : c.k === "price" ? " col-price sortable" : c.k === "change" ? " col-change sortable" : c.k === "open" ? " col-open sortable" : c.k === "volume" ? " col-volume sortable" : c.k === "rsi" ? " col-rsi sortable" : "";
+    return `<span class="${c.k === "reorder" ? "col-reorder" : ""}${sortCls}">${c.label}</span>`;
+  }).join("");
+
+  // rows
   const sorted = sortArr(stks);
-  stockList.innerHTML = sorted.map((s, i) => rowHtml(s, i, sorted)).join("");
+  stockList.innerHTML = sorted.map((s, i) => {
+    const fl = priceFlash[s.code] ? "flash-" + priceFlash[s.code] : "";
+    const isF = i === 0, isL = i === sorted.length - 1;
+    // temporarily modify for first/last reorder buttons
+    const codeBackup = s.code;
+    const cells = cols.map(c => renderCell(s, c.k, fl)).join("");
+    // Fix: disable up/down for first/last
+    const rowDiv = document.createElement("div");
+    rowDiv.innerHTML = cells;
+    const upBtn = rowDiv.querySelector(".reorder-btn.up");
+    const downBtn = rowDiv.querySelector(".reorder-btn.down");
+    if (upBtn && isF) upBtn.setAttribute("disabled", "");
+    if (downBtn && isL) downBtn.setAttribute("disabled", "");
+    return `<div class="stock-row" data-code="${codeBackup}" style="grid-template-columns:${gridTpl}">${rowDiv.innerHTML}</div>`;
+  }).join("");
+
   for (const c of Object.keys(priceFlash)) delete priceFlash[c];
-  applyColVisibility();
+
   // sort indicator
   tableHeader.querySelectorAll("span").forEach(s => s.classList.remove("sort-asc", "sort-desc"));
   if (state.sortKey) {
@@ -208,7 +274,7 @@ stockList.addEventListener("click", e => {
 
 // ===== 銘柄操作 =====
 async function addStock(code) { code = code.trim(); if (!code) return; const arr = stocks(); if (arr.find(s => s.code === code)) { setStatus(`${code} は既に追加済み`, true); return; } setStatus(`${code} 取得中...`, false); try { const data = await invoke("fetch_stock_cmd", { code }); const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); } data._volAvg = data.volume; arr.push(data); setStocks(arr); saveAll(); render(); setStatus(`${code} 追加完了`, false); } catch (e) { setStatus(`${code} の取得に失敗: ${e}`, true); } }
-function removeStock(code) { const arr = stocks(); setStocks(arr.filter(s => s.code !== code)); delete state.prevSignals[code]; saveAll(); render(); applyColVisibility(); }
+function removeStock(code) { const arr = stocks(); setStocks(arr.filter(s => s.code !== code)); delete state.prevSignals[code]; saveAll(); render(); }
 
 // ===== 一時停止 =====
 pauseBtn.addEventListener("click", () => { state.paused = !state.paused; pauseBtn.textContent = state.paused ? "▶" : "⏸"; pauseBtn.classList.toggle("paused", state.paused); setStatus(state.paused ? "自動更新停止中" : "自動更新再開", false); });
