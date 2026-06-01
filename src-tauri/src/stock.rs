@@ -25,6 +25,7 @@ pub struct StockData {
     pub macd_signal: Option<f64>,
     pub rsi: Option<f64>,
     pub signals: Vec<String>,
+    pub recent_closes: Vec<f64>,
 }
 
 // ===== Yahoo Finance API レスポンス型 =====
@@ -222,6 +223,7 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str) -> Result<St
         macd_signal: macd_sig.map(round2),
         rsi: rsi_val.map(round2),
         signals,
+        recent_closes: closes.iter().rev().take(5).rev().map(|&v| round2(v)).collect(),
     })
 }
 
