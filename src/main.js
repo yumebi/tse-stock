@@ -46,6 +46,21 @@ const fmt = n => n != null ? n.toLocaleString() : "-";
 const fmtPct = n => n != null ? (n >= 0 ? "+" : "") + n.toFixed(2) + "%" : "-";
 const fmtOpt = (n, s) => n != null ? n.toLocaleString() + (s||"") : "-";
 
+function sparkline(closes) {
+  if (!closes || closes.length < 2) return "";
+  const w = 64, h = 22, pad = 2;
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const range = max - min || 1;
+  const points = closes.map((v, i) => {
+    const x = pad + (i / (closes.length - 1)) * (w - pad * 2);
+    const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const up = closes[closes.length - 1] >= closes[0];
+  const color = up ? "#3fb950" : "#f85149";
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
 // ===== ソート =====
 const SORT_KEYS = {
   "col-code":    { key: "code",         type: "string" },
@@ -115,6 +130,7 @@ function render() {
         <span class="cell-code">${s.code}</span>
         <span class="cell-name" title="${nameJa || s.name}">${nameDisplay}</span>
         <span class="cell-price">¥${fmt(s.price)}</span>
+        <span class="cell-spark">${sparkline(s.recentCloses)}</span>
         <span class="cell-change ${up ? "up" : "down"}">${fmtPct(s.changePercent)} (${fmt(s.change)})</span>
         <span class="cell-prev">¥${fmt(s.prevClose)}</span>
         <span class="cell-open">¥${fmt(s.open)}</span>
