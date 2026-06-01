@@ -1,6 +1,6 @@
-# TSE Stock — 東証リアルタイム株価アプリ
+# TSE Stock — 東証株価アプリ
 
-Tauri v2 + Rust で構築された、東京証券取引所のリアルタイム株価モニタリングアプリです。
+Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリングアプリです（約15分ディレイ）。
 
 ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
 
@@ -24,7 +24,7 @@ git clone https://github.com/yumebi/tse-stock.git
 
 ## 機能
 
-### 📊 リアルタイム株価
+### 📊 株価モニタリング（約15分ディレイ）
 - 銘柄コード（4桁）で東証銘柄を追加・監視
 - 現在株価・前日比・始値・高値・安値・出来高を表示
 - 高値・安値には**時刻**も表示（分足データから抽出）
