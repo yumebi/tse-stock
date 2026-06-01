@@ -6,31 +6,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 const state = {
   tabs: [], activeTabIdx: 0, sortKey: null, sortAsc: true, paused: false, prevSignals: {},
   hiddenCols: new Set(JSON.parse(localStorage.getItem("tse-stock-cols") || "[]")),
-  colOrder: JSON.parse(localStorage.getItem("tse-stock-col-order") || '["col-code","col-name","col-price","col-spark","col-change","col-prev","col-open","col-hl-h","col-hl-l","col-volume","col-ma5","col-ma25","col-ma75","col-macd","col-sig","col-rsi","col-score","col-sig-main"]'),
 };
-
-// COLS: index in grid (0-20). Fixed cols: reorder(0), code(1), name(2), price(3), spark(4), change(5), prev(6), open(7), hl_h(8), hl_l(9), volume(10), ma5(11), ma25(12), ma75(13), macd(14), macd_sig(15), rsi(16), score(17), sig_main(18), del(19)
-// We only allow reordering of toggleable cols: spark(4), change(5), prev(6), hl(8,9), volume(10), ma(11,12,13), macd(14,15), rsi(16), score(17)
-
-const COL_DEFS = [
-  { cls: "col-spark", idx: 4, label: "5日" },
-  { cls: "col-change", idx: 5, label: "前日比" },
-  { cls: "col-prev", idx: 6, label: "前日終値" },
-  { cls: "col-hl", idx: 8, label: "高値" },
-  { cls: "col-hl", idx: 9, label: "安値" },
-  { cls: "col-volume", idx: 10, label: "出来高" },
-  { cls: "col-ma", idx: 11, label: "MA5" },
-  { cls: "col-ma", idx: 12, label: "MA25" },
-  { cls: "col-ma", idx: 13, label: "MA75" },
-  { cls: "col-ind", idx: 14, label: "MACD" },
-  { cls: "col-ind", idx: 15, label: "Sig" },
-  { cls: "col-rsi", idx: 16, label: "RSI" },
-  { cls: "col-score", idx: 17, label: "判定" },
-];
 
 function saveColState() {
   localStorage.setItem("tse-stock-cols", JSON.stringify([...state.hiddenCols]));
-  localStorage.setItem("tse-stock-col-order", JSON.stringify(state.colOrder));
 }
 
 // ===== ウィンドウ =====
@@ -82,26 +61,27 @@ function scoreClass(sigs) { const { buy, sell } = scoreSignals(sigs); const net 
 function scoreText(sigs) { const { buy, sell } = scoreSignals(sigs); if (buy === 0 && sell === 0) return "-"; return `🟢${buy} 🔴${sell}`; }
 
 // ===== カラム可視性 =====
+const COL_MAP = {
+  spark: 4, change: 5, prev: 6, hl: 8, volume: 10, ma: 11, ind: 14, rsi: 16, score: 17,
+  hl2: 9, ma2: 12, ma3: 13, ind2: 15,
+};
+
 function applyColVisibility() {
-  // header
-  tableHeader.querySelectorAll("span").forEach(sp => {
-    for (const cls of sp.classList) {
-      if (cls.startsWith("col-") && state.hiddenCols.has(cls)) { sp.style.display = "none"; return; }
-    }
-    sp.style.display = "";
-  });
+  const idxs = new Set();
+  for (const key of state.hiddenCols) {
+    if (COL_MAP[key] != null) idxs.add(COL_MAP[key]);
+    // hl covers both 8 and 9
+    if (key === "hl") { idxs.add(8); idxs.add(9); }
+    if (key === "ma") { idxs.add(11); idxs.add(12); idxs.add(13); }
+    if (key === "ind") { idxs.add(14); idxs.add(15); }
+  }
+  // header (20 cols)
+  const hSpans = tableHeader.querySelectorAll("span");
+  hSpans.forEach((sp, i) => { sp.style.display = idxs.has(i) ? "none" : ""; });
   // rows
   stockList.querySelectorAll(".stock-row").forEach(row => {
-    row.querySelectorAll("span[class*='cell-']").forEach(cell => {
-      for (const cls of cell.classList) {
-        const stripped = cls.replace("cell-", "col-");
-        if (state.hiddenCols.has(stripped) && COL_DEFS.some(d => stripped.includes(d.cls))) {
-          cell.style.display = "none";
-          return;
-        }
-      }
-      cell.style.display = "";
-    });
+    const cells = row.querySelectorAll("span");
+    cells.forEach((cell, i) => { cell.style.display = idxs.has(i) ? "none" : ""; });
   });
 }
 
@@ -127,9 +107,17 @@ function exportCSV() {
 }
 
 // ===== カラム切替 + DnD並び替え =====
-colsBtn.addEventListener("click", () => colsMenu.classList.toggle("hidden"));
+colsBtn.addEventListener("click", () => {
+  colsMenu.classList.toggle("hidden");
+  if (!colsMenu.classList.contains("hidden")) {
+    // sync checkboxes
+    colsMenu.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.checked = !state.hiddenCols.has(cb.dataset.col);
+    });
+  }
+});
 
-colsMenu.addEventListener("click", e => {
+colsMenu.addEventListener("change", e => {
   if (e.target.type === "checkbox" && e.target.dataset.col) {
     const col = e.target.dataset.col;
     if (e.target.checked) state.hiddenCols.delete(col);
@@ -137,51 +125,6 @@ colsMenu.addEventListener("click", e => {
     saveColState();
     applyColVisibility();
   }
-});
-
-// DnD for column reorder
-let colDragSrc = null;
-colsMenu.addEventListener("dragstart", e => {
-  const item = e.target.closest(".col-item");
-  if (!item) return;
-  colDragSrc = item;
-  item.classList.add("dragging");
-  e.dataTransfer.effectAllowed = "move";
-});
-colsMenu.addEventListener("dragover", e => {
-  e.preventDefault();
-  const item = e.target.closest(".col-item");
-  if (!item || item === colDragSrc) return;
-  item.classList.add("drag-over");
-  e.dataTransfer.dropEffect = "move";
-});
-colsMenu.addEventListener("dragleave", e => {
-  const item = e.target.closest(".col-item");
-  if (!item) return;
-  if (e.relatedTarget && item.contains(e.relatedTarget)) return;
-  item.classList.remove("drag-over");
-});
-colsMenu.addEventListener("drop", e => {
-  e.preventDefault();
-  const target = e.target.closest(".col-item");
-  if (!target || !colDragSrc || target === colDragSrc) return;
-  target.classList.remove("drag-over");
-  // Reorder colsMenu children
-  const items = [...colsMenu.querySelectorAll(".col-item")];
-  const fromIdx = items.indexOf(colDragSrc), toIdx = items.indexOf(target);
-  if (fromIdx >= 0 && toIdx >= 0) {
-    if (fromIdx < toIdx) colsMenu.insertBefore(colDragSrc, target.nextSibling);
-    else colsMenu.insertBefore(colDragSrc, target);
-    // Update state.colOrder from the new DOM order
-    state.colOrder = items.map(el => el.querySelector("input").dataset.col);
-    saveColState();
-    render();
-  }
-});
-colsMenu.addEventListener("dragend", () => {
-  if (colDragSrc) colDragSrc.classList.remove("dragging");
-  colsMenu.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
-  colDragSrc = null;
 });
 
 document.addEventListener("click", e => { if (!colsBtn.contains(e.target) && !colsMenu.contains(e.target)) colsMenu.classList.add("hidden"); });
