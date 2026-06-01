@@ -20,25 +20,39 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 #app { display: flex; flex-direction: column; height: 100vh; }
 
 /* ===== ヘッダー ===== */
-#header { display: flex; align-items: center; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); gap: 16px; flex-shrink: 0; }
+#header { display: flex; align-items: center; padding: 8px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); gap: 14px; flex-shrink: 0; flex-wrap: wrap; }
 #header-left h1 { font-size: 1.2em; color: var(--accent-blue); line-height: 1.2; }
 .subtitle { font-size: 0.7em; color: var(--text-secondary); }
-#add-stock { display: flex; gap: 6px; }
-#stock-code-input { width: 170px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-size: 0.88em; outline: none; }
+#add-stock { display: flex; gap: 5px; }
+#stock-code-input { width: 160px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 8px; border-radius: 6px; font-size: 0.85em; outline: none; }
 #stock-code-input:focus { border-color: var(--accent-blue); }
-#add-btn { background: var(--accent-blue); color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.88em; }
+#add-btn { background: var(--accent-blue); color: white; border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
 #add-btn:hover { opacity: 0.9; }
-#status-msg { font-size: 0.78em; color: var(--text-secondary); margin-left: auto; }
+#pause-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+#pause-btn:hover { color: var(--text-primary); background: var(--button-hover); }
+#pause-btn.paused { color: var(--accent-orange); }
+#status-msg { font-size: 0.76em; color: var(--text-secondary); margin-left: auto; }
+
+/* ===== タブ ===== */
+#tabs-bar { display: flex; align-items: center; gap: 3px; }
+#tabs { display: flex; gap: 2px; }
+.tab-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 4px 12px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.82em; }
+.tab-btn:hover { color: var(--text-primary); }
+.tab-btn.active { background: var(--bg-primary); color: var(--text-primary); border-bottom-color: var(--bg-primary); }
+.tab-del { background: none; border: none; color: var(--text-muted); cursor: pointer; margin-left: 2px; font-size: 0.9em; }
+.tab-del:hover { color: var(--accent-red); }
+#add-tab-btn { background: none; border: 1px solid var(--border-color); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+#add-tab-btn:hover { color: var(--text-primary); }
 
 /* ===== テーブル ===== */
 #stock-table { flex: 1; overflow: auto; }
 
 .table-header {
   display: grid;
-  grid-template-columns: 48px 70px 0.7fr 105px 70px 120px 105px 100px 95px 95px 80px 72px 72px 72px 68px 55px 52px 1fr 28px;
+  grid-template-columns: 48px 70px 0.7fr 105px 70px 120px 105px 100px 95px 95px 80px 72px 72px 72px 68px 55px 52px 58px 1fr 28px;
   padding: 8px 10px; background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);
   font-size: 0.73em; color: var(--text-secondary); font-weight: 600;
-  position: sticky; top: 0; z-index: 10; min-width: 1590px;
+  position: sticky; top: 0; z-index: 10; min-width: 1650px;
 }
 .table-header span { text-align: right; cursor: default; }
 .table-header span.sortable { cursor: pointer; user-select: none; }
@@ -50,15 +64,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 /* ===== 銘柄行 ===== */
 .stock-row {
   display: grid;
-  grid-template-columns: 48px 70px 0.7fr 105px 70px 120px 105px 100px 95px 95px 80px 72px 72px 72px 68px 55px 52px 1fr 28px;
+  grid-template-columns: 48px 70px 0.7fr 105px 70px 120px 105px 100px 95px 95px 80px 72px 72px 72px 68px 55px 52px 58px 1fr 28px;
   padding: 7px 10px; border-bottom: 1px solid var(--border-color);
-  font-size: 0.82em; align-items: center; min-width: 1590px;
+  font-size: 0.82em; align-items: center; min-width: 1650px;
 }
 .stock-row:hover { background: var(--bg-tertiary); }
 .stock-row span { text-align: right; }
 .stock-row .cell-code, .stock-row .cell-name { text-align: left; }
 
-/* 並べ替えボタン */
 .cell-reorder { display: flex; flex-direction: column; gap: 0; align-items: center; }
 .reorder-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.7em; padding: 0 4px; line-height: 1.1; }
 .reorder-btn:hover { color: var(--text-primary); }
@@ -75,14 +88,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 /* 価格フラッシュ */
 .flash-up { animation: flashGreen 0.8s ease-out; }
 .flash-down { animation: flashRed 0.8s ease-out; }
-@keyframes flashGreen {
-  0% { background-color: rgba(63,185,80,0.4); }
-  100% { background-color: transparent; }
-}
-@keyframes flashRed {
-  0% { background-color: rgba(248,81,73,0.4); }
-  100% { background-color: transparent; }
-}
+@keyframes flashGreen { 0% { background-color: rgba(63,185,80,0.4); } 100% { background-color: transparent; } }
+@keyframes flashRed { 0% { background-color: rgba(248,81,73,0.4); } 100% { background-color: transparent; } }
+
+/* 前日比グラデーション */
+.cell-change { font-weight: 600; border-radius: 3px; padding: 2px 4px; transition: background-color 0.3s; }
+.cell-change.g-up1 { background: rgba(63,185,80,0.08); }
+.cell-change.g-up2 { background: rgba(63,185,80,0.15); }
+.cell-change.g-up3 { background: rgba(63,185,80,0.22); }
+.cell-change.g-up4 { background: rgba(63,185,80,0.30); }
+.cell-change.g-down1 { background: rgba(248,81,73,0.08); }
+.cell-change.g-down2 { background: rgba(248,81,73,0.15); }
+.cell-change.g-down3 { background: rgba(248,81,73,0.22); }
+.cell-change.g-down4 { background: rgba(248,81,73,0.30); }
+.cell-change.up { color: var(--accent-green); }
+.cell-change.down { color: var(--accent-red); }
 
 /* 出来高ヒートマップ */
 .cell-volume.vol-cold { color: #484f58; }
@@ -92,12 +112,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 .cell-volume.vol-hot3 { color: #f85149; font-weight: 700; }
 .cell-spark { display: flex; align-items: center; justify-content: center; }
 .cell-spark svg { display: block; }
-.cell-change { font-weight: 600; }
-.cell-change.up { color: var(--accent-green); }
-.cell-change.down { color: var(--accent-red); }
 
 .cell-prev { color: var(--text-secondary); font-size: 0.9em; }
-
 .cell-hl { font-size: 0.9em; }
 .cell-hl .time { color: var(--text-muted); font-size: 0.75em; display: block; }
 .cell-volume { color: var(--text-secondary); font-size: 0.8em; }
@@ -109,13 +125,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 .cell-rsi { font-size: 0.85em; font-weight: 600; margin-right: 8px; }
 .cell-rsi.over { color: var(--accent-red); }
 .cell-rsi.under { color: #58a6ff; }
+
+/* シグナルスコア */
+.cell-score { font-size: 0.8em; font-weight: 600; border-radius: 3px; padding: 1px 4px; white-space: nowrap; }
+.cell-score.bullish { color: var(--accent-green); background: rgba(63,185,80,0.12); }
+.cell-score.bearish { color: var(--accent-red); background: rgba(248,81,73,0.12); }
+.cell-score.neutral { color: var(--text-muted); }
+
 .cell-sig { font-size: 0.77em; text-align: left !important; overflow: hidden; white-space: nowrap; padding-left: 4px; position: relative; }
 .cell-sig .sig-inner { display: inline-block; animation: ticker 25s linear infinite; }
 .cell-sig:hover .sig-inner { animation-play-state: paused; }
-@keyframes ticker {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
+@keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 .del-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.1em; padding: 2px 4px; line-height: 1; }
 .del-btn:hover { color: var(--accent-red); }
 
