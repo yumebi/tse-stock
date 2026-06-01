@@ -143,7 +143,7 @@ function render() {
         <span class="cell-ind">${fmtOpt(s.macd)}</span>
         <span class="cell-ind">${fmtOpt(s.macdSignal)}</span>
         <span class="cell-rsi ${rsiClass}">${fmtOpt(s.rsi)}</span>
-        <span class="cell-sig">${s.signals?.join(" ") || ""}</span>
+        <span class="cell-sig">${s.signals?.length ? `<span class="sig-inner">${s.signals.join(" ⏺ ")} ⏺ ${s.signals.join(" ⏺ ")}</span>` : ""}</span>
         <span class="cell-del"><button class="del-btn" data-code="${s.code}">×</button></span>
       </div>`;
   }).join("");
