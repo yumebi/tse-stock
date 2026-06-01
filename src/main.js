@@ -139,7 +139,7 @@ function setStocks(arr) { if (state.tabs[state.activeTabIdx]) state.tabs[state.a
 // ===== 指数 =====
 async function fetchIndices() {
   try { const n225 = await invoke("fetch_index_cmd", { symbol: "^N225" }); idxN225.innerHTML = `日経 ${n225.price.toLocaleString()} <span class="${n225.change >= 0 ? 'up' : 'down'}">${n225.change >= 0 ? '+' : ''}${n225.changePercent.toFixed(2)}%</span>`; } catch (_) { idxN225.innerHTML = "日経 ---"; }
-  try { const topx = await invoke("fetch_index_cmd", { symbol: "^TOPX" }); idxTopx.innerHTML = `TOPIX ${topx.price.toLocaleString()} <span class="${topx.change >= 0 ? 'up' : 'down'}">${topx.change >= 0 ? '+' : ''}${topx.changePercent.toFixed(2)}%</span>`; } catch (_) { idxTopx.innerHTML = "TOPIX ---"; }
+  idxTopx.remove(); // TOPIX not available on Yahoo Finance
 }
 
 // ===== CSV =====
