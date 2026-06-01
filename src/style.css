@@ -33,6 +33,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 #pause-btn.paused { color: var(--accent-orange); }
 #status-msg { font-size: 0.76em; color: var(--text-secondary); margin-left: auto; }
 
+/* 指数表示 */
+#index-display { display: flex; gap: 14px; }
+.idx-item { font-size: 0.82em; font-weight: 600; }
+.idx-item .up { color: var(--accent-green); }
+.idx-item .down { color: var(--accent-red); }
+
+/* エクスポート・設定ボタン */
+#export-btn, #cols-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+#export-btn:hover, #cols-btn:hover { color: var(--text-primary); background: var(--button-hover); }
+
+/* カラムメニュー */
+#cols-menu { position: absolute; top: 100%; right: 8px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; z-index: 50; font-size: 0.78em; }
+#cols-menu.hidden { display: none; }
+#cols-menu label { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); cursor: pointer; }
+#cols-menu label:hover { color: var(--text-primary); }
+#cols-menu input[type=checkbox] { accent-color: var(--accent-blue); }
+
+/* 非表示カラム */
+.col-spark.hidden-col, .col-change.hidden-col, .col-prev.hidden-col, .col-hl.hidden-col, .col-volume.hidden-col, .col-ma.hidden-col, .col-ind.hidden-col, .col-rsi.hidden-col, .col-score.hidden-col { display: none; }
+
 /* ===== タブ ===== */
 #tabs-bar { display: flex; align-items: center; gap: 3px; }
 #tabs { display: flex; gap: 2px; }
