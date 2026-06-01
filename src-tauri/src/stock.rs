@@ -763,10 +763,7 @@ pub struct IndexData {
     pub change_percent: f64,
 }
 
-pub async fn fetch_index(app_handle: &tauri::AppHandle, symbol: &str) -> Result<IndexData, String> {
-    use tauri::Emitter;
-    let _ = app_handle.emit("stock-progress", serde_json::json!({ "code": symbol, "step": "指数取得中..." }));
-
+pub async fn fetch_index(_app_handle: &tauri::AppHandle, symbol: &str) -> Result<IndexData, String> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         .timeout(std::time::Duration::from_secs(10))

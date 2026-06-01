@@ -158,6 +158,7 @@ function exportCSV() {
 const TOGGLE_LABELS = { spark: "5日", change: "前日比", prev: "前日終値", hl: "高値/安値", volume: "出来高", ma: "MA(5/25/75)", ind: "MACD/Sig", rsi: "RSI", score: "判定" };
 
 function buildColsMenu() {
+  window._buildColsMenu = buildColsMenu; // expose for inline onclick
   const items = state.toggleOrder.map(t => {
     const checked = !state.hiddenToggles.has(t);
     return `<div class="col-item">
@@ -194,13 +195,7 @@ function buildColsMenu() {
   });
 }
 
-colsBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const wasHidden = colsMenu.classList.contains("hidden");
-  colsMenu.classList.toggle("hidden");
-  if (wasHidden) buildColsMenu();
-});
-document.addEventListener("click", () => { if (!colsMenu.classList.contains("hidden")) colsMenu.classList.add("hidden"); });
+document.addEventListener("click", (e) => { if (!colsBtn.contains(e.target) && !colsMenu.classList.contains("hidden")) colsMenu.classList.add("hidden"); });
 
 // ===== ソート =====
 const SORT_KEYS = { "col-code": { key: "code" }, "col-name": { key: "nameJa" }, "col-price": { key: "price" }, "col-change": { key: "change" }, "col-open": { key: "open" }, "col-volume": { key: "volume" }, "col-rsi": { key: "rsi" } };
