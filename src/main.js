@@ -363,6 +363,8 @@ setInterval(async () => {
     } catch (_) {}
   }
   render();
+  const now = new Date();
+  setStatus(`更新完了 ${now.toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"})}`, false);
 }, 30000);
 
 // ===== ウィンドウ保存 =====
