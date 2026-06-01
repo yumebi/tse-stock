@@ -72,8 +72,7 @@ const stockCodeInput = document.getElementById("stock-code-input");
 const addBtn = document.getElementById("add-btn");
 const pauseBtn = document.getElementById("pause-btn");
 const exportBtn = document.getElementById("export-btn");
-const colsBtn = document.getElementById("cols-btn");
-const colsMenu = document.getElementById("cols-menu");
+const toggleAllBtn = document.getElementById("toggle-all-btn");
 const statusMsg = document.getElementById("status-msg");
 const tableHeader = document.querySelector(".table-header");
 const tabsEl = document.getElementById("tabs");
@@ -154,52 +153,25 @@ function exportCSV() {
   setStatus("CSVエクスポート完了", false);
 }
 
-// ===== カラムメニュー =====
-const TOGGLE_LABELS = { spark: "5日", change: "前日比", prev: "前日終値", hl: "高値/安値", volume: "出来高", ma: "MA(5/25/75)", ind: "MACD/Sig", rsi: "RSI", score: "判定" };
+// ===== 全カラム切替 =====
+toggleAllBtn.addEventListener("click", () => {
+  const allHidden = state.hiddenToggles.size === state.toggleOrder.length;
+  if (allHidden) { state.hiddenToggles.clear(); } else { state.toggleOrder.forEach(t => state.hiddenToggles.add(t)); }
+  saveColState();
+  render();
+});
 
-function buildColsMenu() {
-  window._buildColsMenu = buildColsMenu; // expose for inline onclick
-  const items = state.toggleOrder.map(t => {
-    const checked = !state.hiddenToggles.has(t);
-    return `<div class="col-item">
-      <button class="tgl-up" data-tgl="${t}">▲</button>
-      <button class="tgl-down" data-tgl="${t}">▼</button>
-      <input type="checkbox" data-tgl="${t}" ${checked ? "checked" : ""}>
-      <span>${TOGGLE_LABELS[t] || t}</span>
-    </div>`;
-  }).join("");
-  colsMenu.innerHTML = `<div class="cols-header">カラム切替・並び替え</div>${items}`;
-
-  // checkbox change
-  colsMenu.querySelectorAll("input[type=checkbox]").forEach(cb => {
-    cb.addEventListener("change", () => {
-      if (cb.checked) state.hiddenToggles.delete(cb.dataset.tgl);
-      else state.hiddenToggles.add(cb.dataset.tgl);
-      saveColState();
-      render();
-    });
-  });
-  // move up
-  colsMenu.querySelectorAll(".tgl-up").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const t = btn.dataset.tgl, i = state.toggleOrder.indexOf(t);
-      if (i > 0) { [state.toggleOrder[i - 1], state.toggleOrder[i]] = [state.toggleOrder[i], state.toggleOrder[i - 1]]; saveColState(); render(); buildColsMenu(); }
-    });
-  });
-  // move down
-  colsMenu.querySelectorAll(".tgl-down").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const t = btn.dataset.tgl, i = state.toggleOrder.indexOf(t);
-      if (i < state.toggleOrder.length - 1) { [state.toggleOrder[i], state.toggleOrder[i + 1]] = [state.toggleOrder[i + 1], state.toggleOrder[i]]; saveColState(); render(); buildColsMenu(); }
-    });
-  });
-}
-
-document.addEventListener("click", (e) => { if (!colsBtn.contains(e.target) && !colsMenu.classList.contains("hidden")) colsMenu.classList.add("hidden"); });
-
-// ===== ソート =====
+// ===== ソート / カラム移動 =====
 const SORT_KEYS = { "col-code": { key: "code" }, "col-name": { key: "nameJa" }, "col-price": { key: "price" }, "col-change": { key: "change" }, "col-open": { key: "open" }, "col-volume": { key: "volume" }, "col-rsi": { key: "rsi" } };
 tableHeader.addEventListener("click", e => {
+  // ◀▶ column reorder
+  const arw = e.target.closest(".col-arrow");
+  if (arw) {
+    const tgl = arw.dataset.tgl, dir = arw.dataset.dir, i = state.toggleOrder.indexOf(tgl);
+    if (dir === "left" && i > 0) { [state.toggleOrder[i - 1], state.toggleOrder[i]] = [state.toggleOrder[i], state.toggleOrder[i - 1]]; saveColState(); render(); }
+    if (dir === "right" && i < state.toggleOrder.length - 1) { [state.toggleOrder[i], state.toggleOrder[i + 1]] = [state.toggleOrder[i + 1], state.toggleOrder[i]]; saveColState(); render(); }
+    return;
+  }
   const sp = e.target.closest("span"); if (!sp) return;
   const cls = [...sp.classList].find(c => SORT_KEYS[c]); if (!cls || !SORT_KEYS[cls].key) return;
   const sk = SORT_KEYS[cls];
@@ -226,10 +198,11 @@ function render() {
   const gridTpl = cols.map(c => c.w).join(" ");
   tableHeader.style.gridTemplateColumns = gridTpl;
 
-  // header
-  tableHeader.innerHTML = cols.map(c => {
+  // header with ◀▶ for toggleable cols
+  tableHeader.innerHTML = cols.map((c, ci) => {
     const sortCls = c.k === "code" ? " col-code sortable" : c.k === "name" ? " col-name sortable" : c.k === "price" ? " col-price sortable" : c.k === "change" ? " col-change sortable" : c.k === "open" ? " col-open sortable" : c.k === "volume" ? " col-volume sortable" : c.k === "rsi" ? " col-rsi sortable" : "";
-    return `<span class="${c.k === "reorder" ? "col-reorder" : ""}${sortCls}">${c.label}</span>`;
+    const tgBtns = c.toggle ? `<button class="col-arrow col-left" data-tgl="${c.toggle}" data-dir="left">◀</button><button class="col-arrow col-right" data-tgl="${c.toggle}" data-dir="right">▶</button>` : "";
+    return `<span class="${c.k === "reorder" ? "col-reorder" : ""}${sortCls}">${tgBtns}${c.label}</span>`;
   }).join("");
 
   // rows

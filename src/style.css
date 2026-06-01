@@ -40,20 +40,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 .idx-item .down { color: var(--accent-red); }
 
 /* エクスポート・設定ボタン */
-#export-btn, #cols-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
-#export-btn:hover, #cols-btn:hover { color: var(--text-primary); background: var(--button-hover); }
-
-/* カラムメニュー */
-#cols-menu { position: absolute; top: 100%; right: 8px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; z-index: 50; font-size: 0.78em; }
-#cols-menu.hidden { display: none; }
-.cols-header { font-size: 0.9em; color: var(--text-primary); margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--border-color); }
-.col-item { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); padding: 2px 4px; border-radius: 3px; }
-.col-item:hover { background: var(--bg-tertiary); }
-.col-reorder-btns { display: flex; flex-direction: column; gap: 0; }
-.col-reorder-btns button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.55em; padding: 0 2px; line-height: 1; }
-.col-reorder-btns button:hover { color: var(--text-primary); }
-.col-reorder-btns button:disabled { opacity: 0.2; cursor: default; }
-#cols-menu input[type=checkbox] { accent-color: var(--accent-blue); cursor: pointer; }
+#export-btn, #toggle-all-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+#export-btn:hover, #toggle-all-btn:hover { color: var(--text-primary); background: var(--button-hover); }
 
 /* 非表示カラム */
 .col-spark.hidden-col, .col-change.hidden-col, .col-prev.hidden-col, .col-hl.hidden-col, .col-volume.hidden-col, .col-ma.hidden-col, .col-ind.hidden-col, .col-rsi.hidden-col, .col-score.hidden-col { display: none; }
@@ -81,6 +69,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 }
 .table-header span { text-align: right; cursor: default; }
 .table-header span.sortable { cursor: pointer; user-select: none; }
+.col-arrow { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.65em; padding: 0 1px; vertical-align: middle; }
+.col-arrow:hover { color: var(--text-primary); }
 .table-header span.sortable:hover { color: var(--text-primary); }
 .table-header span.sort-asc::after { content: " ▲"; font-size: 0.7em; }
 .table-header span.sort-desc::after { content: " ▼"; font-size: 0.7em; }
