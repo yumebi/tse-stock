@@ -150,14 +150,18 @@ async function fetchIndices() {
 }
 
 // ===== CSV =====
-function exportCSV() {
+async function exportCSV() {
   const arr = stocks(); if (arr.length === 0) return;
   const headers = ["コード", "企業名", "現在株価", "前日比%", "前日比", "前日終値", "始値", "高値", "安値", "出来高", "MA5", "MA25", "MA75", "MACD", "Sig", "RSI", "判定"];
   const rows = arr.map(s => [s.code, s.nameJa || s.name, s.price, s.changePercent?.toFixed(2), s.change, s.prevClose, s.open, s.high, s.low, s.volume, s.ma5?.toFixed(2), s.ma25?.toFixed(2), s.ma75?.toFixed(2), s.macd?.toFixed(4), s.macdSignal?.toFixed(4), s.rsi?.toFixed(1), scoreText(s.signals)]);
   const csv = [headers, ...rows].map(r => r.map(c => `"${(c ?? '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `tse-stock-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-  setStatus("CSVエクスポート完了", false);
+  const filename = `tse-stock-${new Date().toISOString().slice(0, 10)}.csv`;
+  try {
+    const path = await invoke("save_csv_cmd", { data: "\uFEFF" + csv, filename });
+    setStatus(`CSV保存完了: ${path}`, false);
+  } catch (e) {
+    setStatus(`CSV保存失敗: ${e}`, true);
+  }
 }
 
 // ===== ソート / カラム移動 =====
