@@ -787,6 +787,17 @@ pub async fn fetch_index(_app_handle: &tauri::AppHandle, symbol: &str) -> Result
     Ok(IndexData { name, price: round2(price), change: round2(change), change_percent: round2(change_percent) })
 }
 
+// ===== CSV エクスポート =====
+
+pub fn save_csv(data: &str, filename: &str) -> Result<String, String> {
+    let home = std::env::var("USERPROFILE").unwrap_or_else(|_| ".".to_string());
+    let dir = std::path::Path::new(&home).join("Downloads");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("ディレクトリ作成失敗: {}", e))?;
+    let path = dir.join(filename);
+    std::fs::write(&path, data).map_err(|e| format!("ファイル保存失敗: {}", e))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 // ===== ヘルパー =====
 
 fn round2(v: f64) -> f64 {
