@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/main/packages/tauri-utils/schema.json",
-  "productName": "TSE Stock",
-  "version": "0.1.0",
+  "productName": "YMB TSE Stock",
+  "version": "1.0.0",
   "identifier": "com.tsestock.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -24,7 +24,7 @@
   "app": {
     "windows": [
       {
-        "title": "TSE Stock - 東証株価",
+        "title": "YMB TSE Stock - 東証株価",
         "width": 1200,
         "height": 800,
         "resizable": true,
