@@ -189,4 +189,4 @@ npm run tauri dev
 
 ## ライセンス
 
-MIT
+[MIT License](LICENSE) © 2026 ymb
