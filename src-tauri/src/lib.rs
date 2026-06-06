@@ -3,8 +3,13 @@ mod stock;
 use stock::{fetch_index, fetch_stock};
 
 #[tauri::command]
-async fn fetch_stock_cmd(app_handle: tauri::AppHandle, code: String) -> Result<stock::StockData, String> {
-    fetch_stock(&app_handle, &code).await
+async fn fetch_stock_cmd(
+    app_handle: tauri::AppHandle,
+    code: String,
+    known_name: Option<String>,
+    need_intraday_closes: bool,
+) -> Result<stock::StockData, String> {
+    fetch_stock(&app_handle, &code, known_name, need_intraday_closes).await
 }
 
 #[tauri::command]

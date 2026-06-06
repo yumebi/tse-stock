@@ -26,6 +26,9 @@ pub struct StockData {
     pub rsi: Option<f64>,
     pub signals: Vec<String>,
     pub recent_closes: Vec<f64>,
+    pub intraday_closes: Vec<f64>,
+    pub week52_high: Option<f64>,
+    pub week52_low: Option<f64>,
 }
 
 // ===== Yahoo Finance API レスポンス型 =====
@@ -96,7 +99,7 @@ struct YahooQuote {
 
 // ===== メイン: 株価取得 =====
 
-pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str) -> Result<StockData, String> {
+pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: Option<String>, need_intraday_closes: bool) -> Result<StockData, String> {
     use tauri::Emitter;
     let emit = |step: &str| {
         let _ = app_handle.emit("stock-progress", serde_json::json!({ "code": code, "step": step }));
@@ -109,17 +112,32 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str) -> Result<St
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
-    // 4つのリクエストを並列実行
-    let url_current = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}.T?interval=1d&range=1d", code);
-    let url_hist = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}.T?interval=1d&range=6mo", code);
-    let url_intra = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}.T?interval=1m&range=1d", code);
-    let url_ja = format!("https://minkabu.jp/stock/{}", code);
+    // known_name が None の時のみみんかぶ取得を並列実行
+    let ja_task: Option<tokio::task::JoinHandle<Option<String>>> = if known_name.is_none() {
+        let url_ja = format!("https://minkabu.jp/stock/{}", code);
+        let c = client.clone();
+        Some(tokio::spawn(async move {
+            let resp = c.get(&url_ja).send().await.ok()?;
+            let html = resp.text().await.ok()?;
+            let title_start = html.find("<title>")?;
+            let title_end = html[title_start..].find("</title>")?;
+            let title = &html[title_start + 7..title_start + title_end];
+            let name = title.split(" (").next()?.trim().to_string();
+            if name.is_empty() || name.contains("みんかぶ") { None } else { Some(name) }
+        }))
+    } else {
+        None
+    };
 
-    let (resp_cur, resp_hist, resp_intra, resp_ja) = tokio::join!(
+    // 3つのリクエストを並列実行
+    let url_current = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}.T?interval=1d&range=1d", code);
+    let url_hist = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}.T?interval=1d&range=1y", code);
+    let url_intra = format!("https://query1.finance.yahoo.com/v8/finance/chart/{}.T?interval=1m&range=1d", code);
+
+    let (resp_cur, resp_hist, resp_intra) = tokio::join!(
         client.get(&url_current).send(),
         client.get(&url_hist).send(),
         client.get(&url_intra).send(),
-        client.get(&url_ja).send(),
     );
 
     // -- 現在値 --
@@ -139,13 +157,15 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str) -> Result<St
 
     emit("企業名取得中...");
     // -- 日本語企業名（みんかぶ → 内蔵マッピング） --
-    let name_ja = if let Ok(resp) = resp_ja {
-        fetch_japanese_name(resp).await.or_else(|| japanese_name(code))
+    let name_ja = if let Some(name) = known_name {
+        Some(name)
+    } else if let Some(task) = ja_task {
+        task.await.ok().flatten().or_else(|| japanese_name(code))
     } else {
         japanese_name(code)
     };
 
-    // -- 履歴データ (6ヶ月) --
+    // -- 履歴データ (1年) --
     let (closes, volumes, opens_full, highs_full, lows_full) = if let Ok(resp) = resp_hist {
         let data: YahooResponse = resp.json().await.unwrap_or_else(|_| YahooResponse { chart: YahooChart { result: None, error: None } });
         if let Some(result) = data.chart.result.and_then(|mut r| r.pop()) {
@@ -167,13 +187,20 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str) -> Result<St
         opens_full.last().copied().unwrap_or(0.0)
     };
 
-    // -- 分足から高値・安値の時刻を抽出 --
-    let (high_time, low_time) = if let Ok(resp) = resp_intra {
+    // -- 分足から高値・安値の時刻＋日中終値リストを抽出 --
+    let (high_time, low_time, intraday_closes) = if let Ok(resp) = resp_intra {
         let data: YahooResponse = resp.json().await.unwrap_or_else(|_| YahooResponse { chart: YahooChart { result: None, error: None } });
         if let Some(result) = data.chart.result.and_then(|mut r| r.pop()) {
-            find_high_low_time(&result)
-        } else { (None, None) }
-    } else { (None, None) };
+            let (ht, lt) = find_high_low_time(&result);
+            let ic: Vec<f64> = if need_intraday_closes {
+                result.indicators.quote.into_iter()
+                    .next()
+                    .map(|q| q.close.iter().filter_map(|v| *v).map(round2).collect::<Vec<_>>())
+                    .unwrap_or_default()
+            } else { vec![] };
+            (ht, lt, ic)
+        } else { (None, None, vec![]) }
+    } else { (None, None, vec![]) };
 
     emit("指標計算中...");
     // -- テクニカル指標 --
@@ -191,6 +218,8 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str) -> Result<St
             * 100.0
     } else { 50.0 };
     let atr = calc_atr(&closes, &highs_full, &lows_full, 14);
+    let week52_high = highs_full.iter().copied().reduce(f64::max).map(round2);
+    let week52_low  = lows_full.iter().copied().reduce(f64::min).map(round2);
     let consecutive = consecutive_direction(&closes);
     let day_high = meta.regular_market_day_high.unwrap_or(0.0);
     let day_low = meta.regular_market_day_low.unwrap_or(0.0);
@@ -223,21 +252,11 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str) -> Result<St
         macd_signal: macd_sig.map(round2),
         rsi: rsi_val.map(round2),
         signals,
-        recent_closes: closes.iter().rev().take(5).rev().map(|&v| round2(v)).collect(),
+        recent_closes: closes.iter().map(|&v| round2(v)).collect(),
+        intraday_closes,
+        week52_high,
+        week52_low,
     })
-}
-
-// ===== 日本語企業名（Yahoo Finance Japanのtitleタグから抽出） =====
-
-async fn fetch_japanese_name(resp: reqwest::Response) -> Option<String> {
-    let html = resp.text().await.ok()?;
-    // <title>トヨタ自動車 (7203) : 株価... - みんかぶ</title>
-    let title_start = html.find("<title>")?;
-    let title_end = html[title_start..].find("</title>")?;
-    let title = &html[title_start + 7..title_start + title_end];
-    // " (" の前までが企業名
-    let name = title.split(" (").next()?.trim();
-    if name.is_empty() || name.contains("みんかぶ") { None } else { Some(name.to_string()) }
 }
 
 fn japanese_name(code: &str) -> Option<String> {
