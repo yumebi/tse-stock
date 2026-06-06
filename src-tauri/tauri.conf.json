@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/main/packages/tauri-utils/schema.json",
   "productName": "YMB TSE Stock",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "identifier": "com.tsestock.desktop",
   "build": {
     "frontendDist": "../dist",

@@ -1,7 +1,7 @@
 import { state, priceFlash, stocks, getNameCache } from "./state.js";
 import { SORT_KEYS, SPARK_LABELS, SIG_PAUSE_MS } from "./constants.js";
 import { visibleCols } from "./columns.js";
-import { scoreSignals, scoreClass, scoreText, sparkline, getSparkData, volClass, gradClass, fmt, fmtPct, fmtOpt } from "./indicators.js";
+import { scoreSignals, scoreClass, scoreText, filterSigs, sparkline, getSparkData, volClass, gradClass, fmt, fmtPct, fmtOpt } from "./indicators.js";
 import { applySticky } from "./sticky.js";
 
 let _tableHeader = null;
@@ -88,7 +88,7 @@ export function renderCell(s, k, fl, rowOpts = {}) {
     case "sig": return `<span class="cell-ind">${fmtOpt(s.macdSignal)}</span>`;
     case "rsi": return `<span class="cell-rsi ${rsiC}">${fmtOpt(s.rsi)}</span>`;
     case "score": return `<span class="cell-score ${scoreClass(s.signals)}">${scoreText(s.signals)}</span>`;
-    case "signals": { const text = s.signals?.length ? s.signals.join(" ⏺ ") : ""; return `<span class="cell-sig">${text ? `<span class="sig-inner" data-sig-text="${text.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}">${text}</span>` : ""}</span>`; }
+    case "signals": { const fs = filterSigs(s.signals); const text = fs.length ? fs.join(" ⏺ ") : ""; return `<span class="cell-sig">${text ? `<span class="sig-inner" data-sig-text="${text.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}">${text}</span>` : ""}</span>`; }
     case "w52hi": {
       if (!s.week52High || !s.price) return `<span class="cell-w52">-</span>`;
       const dev = ((s.price / s.week52High) - 1) * 100;
@@ -132,7 +132,7 @@ export function renderCell(s, k, fl, rowOpts = {}) {
 
 // ===== 差分レンダリング =====
 function computeLayoutKey(gridTpl) {
-  return [gridTpl, state.density, state.sparkPeriod, state.pinCols].join("|");
+  return [gridTpl, state.density, state.sparkPeriod, state.pinCols, JSON.stringify(state.sigCats)].join("|");
 }
 
 function computeRowHash(s, fl, isFirst, isLast) {

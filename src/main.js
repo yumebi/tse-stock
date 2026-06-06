@@ -2,10 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS } from "./lib/constants.js";
+import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS, SIG_CATEGORIES } from "./lib/constants.js";
 import {
   state, priceFlash,
-  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveNotes, savePortfolio,
+  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveNotes, savePortfolio, saveSigCats,
   getNameCache, saveNameCache,
   stocks, setStocks,
   hash, detectSignalChange,
@@ -30,6 +30,7 @@ const statusMsg      = document.getElementById("status-msg");
 const tableHeader    = document.querySelector(".table-header");
 const tabsEl         = document.getElementById("tabs");
 const colPanelBtn    = document.getElementById("col-panel-btn");
+const sigCatBtn      = document.getElementById("sig-cat-btn");
 const addTabBtn      = document.getElementById("add-tab-btn");
 const idxN225        = document.getElementById("idx-n225");
 const marketStatus   = document.getElementById("market-status");
@@ -131,11 +132,59 @@ function renderColPanel() {
 colPanelBtn.addEventListener("click", e => {
   e.stopPropagation();
   if (colPanel.classList.contains("open")) { colPanel.classList.remove("open"); return; }
+  sigCatPanel.classList.remove("open");
   renderColPanel();
   const r = colPanelBtn.getBoundingClientRect();
   colPanel.style.top = (r.bottom + 4) + "px";
   colPanel.style.right = (window.innerWidth - r.right) + "px";
   colPanel.classList.add("open");
+});
+
+// ===== シグナル種別パネル =====
+const sigCatPanel = (() => { const el = document.createElement("div"); el.id = "sig-cat-panel"; document.body.appendChild(el); return el; })();
+
+function renderSigCatPanel() {
+  const allOn = SIG_CATEGORIES.every(c => state.sigCats[c.key] !== false);
+  const allOff = SIG_CATEGORIES.every(c => state.sigCats[c.key] === false);
+  sigCatPanel.innerHTML = `
+    <div class="sig-cat-header">
+      <span>表示シグナルの種類</span>
+      <span class="sig-cat-ctrl">
+        <button class="sig-cat-all-btn"${allOn ? " disabled" : ""}>全ON</button>
+        <button class="sig-cat-none-btn"${allOff ? " disabled" : ""}>全OFF</button>
+      </span>
+    </div>
+    ${SIG_CATEGORIES.map(c => `
+      <label class="sig-cat-item">
+        <input type="checkbox" data-cat="${c.key}"${state.sigCats[c.key] !== false ? " checked" : ""}>
+        <span>${c.label}</span>
+      </label>`).join("")}
+  `;
+  sigCatPanel.querySelectorAll("input[data-cat]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      state.sigCats[cb.dataset.cat] = cb.checked;
+      saveSigCats(); render();
+    });
+  });
+  sigCatPanel.querySelector(".sig-cat-all-btn").addEventListener("click", () => {
+    SIG_CATEGORIES.forEach(c => { state.sigCats[c.key] = true; });
+    saveSigCats(); render(); renderSigCatPanel();
+  });
+  sigCatPanel.querySelector(".sig-cat-none-btn").addEventListener("click", () => {
+    SIG_CATEGORIES.forEach(c => { state.sigCats[c.key] = false; });
+    saveSigCats(); render(); renderSigCatPanel();
+  });
+}
+
+sigCatBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  if (sigCatPanel.classList.contains("open")) { sigCatPanel.classList.remove("open"); return; }
+  colPanel.classList.remove("open");
+  renderSigCatPanel();
+  const r = sigCatBtn.getBoundingClientRect();
+  sigCatPanel.style.top = (r.bottom + 4) + "px";
+  sigCatPanel.style.right = (window.innerWidth - r.right) + "px";
+  sigCatPanel.classList.add("open");
 });
 
 // ===== アラートパネル =====
@@ -521,6 +570,7 @@ stockList.addEventListener("click", e => {
 
 document.addEventListener("click", () => {
   colPanel.classList.remove("open");
+  sigCatPanel.classList.remove("open");
   alertPanel.classList.remove("open");
   notePanel.classList.remove("open");
   portfolioPanel.classList.remove("open");
