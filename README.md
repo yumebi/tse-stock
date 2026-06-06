@@ -178,7 +178,7 @@ tse-stock/
 git clone https://github.com/yumebi/tse-stock.git
 cd tse-stock
 npm install
-npm run build:release
+npm run tauri build
 ```
 
 ### プッシュ（バージョン自動カウントアップ）
