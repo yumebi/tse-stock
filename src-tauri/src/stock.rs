@@ -223,12 +223,15 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: 
     let consecutive = consecutive_direction(&closes);
     let day_high = meta.regular_market_day_high.unwrap_or(0.0);
     let day_low = meta.regular_market_day_low.unwrap_or(0.0);
+    let ichimoku = calc_ichimoku(&highs_full, &lows_full);
+    let stoch = calc_stochastics(&closes, &highs_full, &lows_full, 14);
 
     let signals = check_signals(
         ma5, ma5_prev, ma25, ma25_prev, ma75, ma75_prev,
         macd_val, macd_sig, macd_prev, macd_sig_prev, rsi_val,
         &bb, price, cur_vol, vol_avg, day_range_pct,
         change_percent, atr, consecutive, day_high, day_low,
+        &ichimoku, &stoch,
     );
 
     Ok(StockData {
@@ -654,6 +657,52 @@ fn consecutive_direction(closes: &[f64]) -> Option<(i32, bool)> {
     if count >= 3 { Some((count, is_up)) } else { None }
 }
 
+// ===== 一目均衡表 =====
+
+struct IchimokuData {
+    tenkan: f64,
+    kijun: f64,
+    tenkan_prev: f64,
+    kijun_prev: f64,
+    span_a: f64,
+    span_b: f64,
+}
+
+fn calc_ichimoku(highs: &[f64], lows: &[f64]) -> Option<IchimokuData> {
+    let n = highs.len();
+    if n < 54 || lows.len() < n { return None; }
+    let hmax = |s: usize, l: usize| highs[s..s + l].iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let lmin = |s: usize, l: usize| lows[s..s + l].iter().copied().fold(f64::INFINITY, f64::min);
+    let tenkan      = (hmax(n - 9,  9)  + lmin(n - 9,  9))  / 2.0;
+    let kijun       = (hmax(n - 26, 26) + lmin(n - 26, 26)) / 2.0;
+    let tenkan_prev = (hmax(n - 10, 9)  + lmin(n - 10, 9))  / 2.0;
+    let kijun_prev  = (hmax(n - 27, 26) + lmin(n - 27, 26)) / 2.0;
+    let span_a = (tenkan + kijun) / 2.0;
+    let span_b = (hmax(n - 52, 52) + lmin(n - 52, 52)) / 2.0;
+    Some(IchimokuData { tenkan, kijun, tenkan_prev, kijun_prev, span_a, span_b })
+}
+
+// ===== ストキャスティクス (Fast %K / %D) =====
+
+fn calc_stochastics(closes: &[f64], highs: &[f64], lows: &[f64], period: usize) -> Option<(f64, f64, f64, f64)> {
+    let n = closes.len();
+    if n < period + 3 || highs.len() < n || lows.len() < n { return None; }
+    let raw_k = |i: usize| -> f64 {
+        let s = i + 1 - period;
+        let hi = highs[s..=i].iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let lo = lows[s..=i].iter().copied().fold(f64::INFINITY, f64::min);
+        if hi == lo { return 50.0; }
+        (closes[i] - lo) / (hi - lo) * 100.0
+    };
+    let k0 = raw_k(n - 4);
+    let k1 = raw_k(n - 3);
+    let k2 = raw_k(n - 2);
+    let k3 = raw_k(n - 1);
+    let d_cur  = (k1 + k2 + k3) / 3.0;
+    let d_prev = (k0 + k1 + k2) / 3.0;
+    Some((k3, d_cur, k2, d_prev))
+}
+
 // ===== シグナル判定 =====
 
 fn check_signals(
@@ -673,6 +722,8 @@ fn check_signals(
     consecutive: Option<(i32, bool)>,
     day_high: f64,
     day_low: f64,
+    ichimoku: &Option<IchimokuData>,
+    stoch: &Option<(f64, f64, f64, f64)>,
 ) -> Vec<String> {
     let mut sigs = Vec::new();
 
@@ -765,6 +816,37 @@ fn check_signals(
             sigs.push(format!("🔥 {}日続騰", cnt));
         } else {
             sigs.push(format!("❄️ {}日続落", cnt));
+        }
+    }
+
+    // --- 一目均衡表 ---
+    if let Some(ich) = ichimoku {
+        if ich.tenkan_prev <= ich.kijun_prev && ich.tenkan > ich.kijun {
+            sigs.push("🟢 一目: 転換線が基準線を上抜け".to_string());
+        } else if ich.tenkan_prev >= ich.kijun_prev && ich.tenkan < ich.kijun {
+            sigs.push("🔴 一目: 転換線が基準線を下抜け".to_string());
+        }
+        let cloud_top = ich.span_a.max(ich.span_b);
+        let cloud_bottom = ich.span_a.min(ich.span_b);
+        if price > cloud_top {
+            sigs.push("☁️ 一目: 雲の上（強気圏）".to_string());
+        } else if price < cloud_bottom {
+            sigs.push("☁️ 一目: 雲の下（弱気圏）".to_string());
+        } else {
+            sigs.push("☁️ 一目: 雲の中（方向感なし）".to_string());
+        }
+    }
+
+    // --- ストキャスティクス ---
+    if let Some((k, d, k_prev, d_prev)) = stoch {
+        if k_prev <= d_prev && k > d && *k < 20.0 {
+            sigs.push(format!("🟢 ストキャス: 売られすぎ圏で%K上抜け（K={:.0}）", k));
+        } else if k_prev >= d_prev && k < d && *k > 80.0 {
+            sigs.push(format!("🔴 ストキャス: 過熱圏で%K下抜け（K={:.0}）", k));
+        } else if *k > 80.0 {
+            sigs.push(format!("🟠 ストキャス: 過熱（K={:.0}）", k));
+        } else if *k < 20.0 {
+            sigs.push(format!("🔵 ストキャス: 売られすぎ（K={:.0}）", k));
         }
     }
 
