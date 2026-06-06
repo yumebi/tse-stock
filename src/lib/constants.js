@@ -76,3 +76,17 @@ export const DENSITY_NEXT   = { compact: "normal", normal: "large", large: "comp
 export const SPARK_LABELS = { "1d": "1日", "3d": "3日", "1mo": "1月", "3mo": "3月", "6mo": "6月", "1y": "1年" };
 
 export const SIG_PAUSE_MS = 5000;
+
+export const SIG_CATEGORIES = [
+  { key: "ma",    label: "MAクロス（GC/DC）",    keywords: ["GC", "DC"] },
+  { key: "macd",  label: "MACD",                 keywords: ["MACD", "Sig"] },
+  { key: "rsi",   label: "RSI",                  keywords: ["RSI"] },
+  { key: "bb",    label: "BB±2σ",                keywords: ["BB"] },
+  { key: "vol",   label: "出来高スパイク",         keywords: ["出来高"] },
+  { key: "pos",   label: "日中位置（高値圏/安値圏）", keywords: ["高値圏", "安値圏"] },
+  { key: "chg",   label: "急変（急騰/急落/大幅）", keywords: ["急騰", "急落", "大幅高", "大幅安"] },
+  { key: "atr",   label: "ボラティリティ（ATR）",  keywords: ["ATR"] },
+  { key: "seq",   label: "連続方向（続騰/続落）",  keywords: ["続騰", "続落"] },
+  { key: "ichi",  label: "一目均衡表",             keywords: ["一目", "雲"] },
+  { key: "stoch", label: "ストキャスティクス",      keywords: ["ストキャス"] },
+];

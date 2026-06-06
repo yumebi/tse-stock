@@ -1,4 +1,5 @@
 import { state } from "./state.js";
+import { SIG_CATEGORIES } from "./constants.js";
 
 // ===== シグナルスコア =====
 export function scoreSignals(sigs) { let buy = 0, sell = 0; for (const s of sigs || []) { if (s.includes("GC") || s.includes("買い") || s.includes("上抜") || s.includes("続騰")) buy++; if (s.includes("DC") || s.includes("売り") || s.includes("下抜") || s.includes("続落") || s.includes("買われ")) sell++; } return { buy, sell }; }
@@ -28,6 +29,15 @@ export function getSparkData(s) {
 // ===== 表示クラス =====
 export function volClass(s) { if (!s._volAvg || s._volAvg <= 0) return ""; const r = s.volume / s._volAvg; if (r >= 3) return "vol-hot3"; if (r >= 2) return "vol-hot2"; if (r >= 1.5) return "vol-hot1"; if (r >= 1) return "vol-normal"; return "vol-cold"; }
 export function gradClass(pct) { const a = Math.abs(pct); if (a >= 5) return pct > 0 ? "g-up4" : "g-down4"; if (a >= 3) return pct > 0 ? "g-up3" : "g-down3"; if (a >= 1) return pct > 0 ? "g-up2" : "g-down2"; if (a > 0) return pct > 0 ? "g-up1" : "g-down1"; return ""; }
+
+// ===== シグナルフィルター =====
+export function filterSigs(sigs) {
+  if (!sigs) return [];
+  return sigs.filter(sig => {
+    const cat = SIG_CATEGORIES.find(c => c.keywords.some(kw => sig.includes(kw)));
+    return !cat || state.sigCats[cat.key] !== false;
+  });
+}
 
 // ===== フォーマット =====
 export const fmt = n => n != null ? n.toLocaleString() : "-";

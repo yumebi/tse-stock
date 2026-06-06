@@ -47,6 +47,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 #export-btn:hover { color: var(--text-primary); background: var(--button-hover); }
 #col-panel-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
 #col-panel-btn:hover { color: var(--text-primary); background: var(--button-hover); }
+#sig-cat-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+#sig-cat-btn:hover { color: var(--text-primary); background: var(--button-hover); }
 
 /* 列パネル */
 #col-panel { display: none; position: fixed; z-index: 300; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; min-width: 240px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); flex-direction: column; gap: 2px; }
@@ -60,6 +62,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 .col-move-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.8em; padding: 2px 4px; border-radius: 3px; line-height: 1; }
 .col-move-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--button-hover); }
 .col-move-btn:disabled { opacity: 0.2; cursor: default; }
+
+/* シグナル種別パネル */
+#sig-cat-panel { display: none; position: fixed; z-index: 300; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; min-width: 220px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); flex-direction: column; gap: 2px; }
+#sig-cat-panel.open { display: flex; }
+.sig-cat-header { display: flex; align-items: center; justify-content: space-between; font-size: 0.78em; color: var(--text-muted); padding-bottom: 6px; border-bottom: 1px solid var(--border-color); margin-bottom: 4px; }
+.sig-cat-ctrl { display: flex; gap: 4px; }
+.sig-cat-all-btn, .sig-cat-none-btn { background: var(--button-bg); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.85em; }
+.sig-cat-all-btn:hover:not(:disabled), .sig-cat-none-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--button-hover); }
+.sig-cat-all-btn:disabled, .sig-cat-none-btn:disabled { opacity: 0.35; cursor: default; }
+.sig-cat-item { display: flex; align-items: center; gap: 8px; font-size: 0.82em; color: var(--text-secondary); padding: 4px 0; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+.sig-cat-item:last-child { border-bottom: none; }
+.sig-cat-item:hover { color: var(--text-primary); }
+.sig-cat-item input[type=checkbox] { accent-color: var(--accent-blue); cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; }
 
 /* 非表示カラム */
 .col-spark.hidden-col, .col-change.hidden-col, .col-prev.hidden-col, .col-hl.hidden-col, .col-volume.hidden-col, .col-ma.hidden-col, .col-ind.hidden-col, .col-rsi.hidden-col, .col-score.hidden-col { display: none; }
