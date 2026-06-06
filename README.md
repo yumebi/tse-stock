@@ -1,8 +1,8 @@
-# TSE Stock — 東証株価アプリ
+# YMB TSE Stock — 東証株価アプリ
 
 Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリングアプリです（約15分ディレイ）。
 
-![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
+![version](https://img.shields.io/badge/version-1.0.3-brightgreen) ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
 
 ## 🚀 クイックスタート
 
@@ -14,8 +14,8 @@ git clone https://github.com/yumebi/tse-stock.git
 
 | 形式 | パス | サイズ |
 |---|---|---|
-| **NSIS インストーラー** | `src-tauri/target/release/bundle/nsis/TSE Stock_0.1.0_x64-setup.exe` | ~3 MB |
-| MSI インストーラー | `src-tauri/target/release/bundle/msi/TSE Stock_0.1.0_x64_en-US.msi` | ~4 MB |
+| **NSIS インストーラー** | `src-tauri/target/release/bundle/nsis/YMB TSE Stock_1.0.3_x64-setup.exe` | ~3 MB |
+| MSI インストーラー | `src-tauri/target/release/bundle/msi/YMB TSE Stock_1.0.3_x64_en-US.msi` | ~4 MB |
 | ポータブル版 | `src-tauri/target/release/tse-stock.exe` | ~11 MB |
 
 > ※ Windows Defender が警告を出す場合があります。「詳細情報」→「実行」で起動してください。
@@ -29,6 +29,7 @@ git clone https://github.com/yumebi/tse-stock.git
 - 更新間隔を選択可能（15秒 / 30秒 / 1分 / 2分 / 5分）
 - ⏸ ボタンで自動更新を一時停止・再開
 - 🔄 ボタンで手動即時更新
+- ウィンドウタイトルにアプリバージョンを表示（例: `YMB TSE Stock v1.0.3 - 東証株価`）
 
 ### 🗂 タブ管理
 - 複数タブで銘柄リストを用途別に整理
@@ -44,6 +45,8 @@ git clone https://github.com/yumebi/tse-stock.git
 | MACD | MACD(12,26) + シグナル線(9) |
 | RSI | 14日RSI |
 | ボリンジャーバンド | 20日移動平均 ± 2σ |
+| 一目均衡表 | 転換線(9)・基準線(26)・先行スパンA/B・雲 |
+| ストキャスティクス | %K(14) / %D(3)・過熱圏/売られすぎ圏 |
 | 52週高値/安値 | 1年間の高値・安値と現在株価の乖離率 |
 | ATR | 14日 Average True Range（ボラティリティ計測） |
 
@@ -55,14 +58,20 @@ git clone https://github.com/yumebi/tse-stock.git
 | **MACD** | シグナル線クロス（買い/売り）+ 継続状態 |
 | **RSI** | 70以上で買われすぎ / 30以下で売られすぎ |
 | **ボリンジャーバンド** | ±2σタッチ（上限・下限） |
+| **一目均衡表** | 転換線×基準線クロス / 雲の上下判定 |
+| **ストキャスティクス** | 売られすぎ圏での%K上抜け / 過熱圏での%K下抜け |
 | **急変** | 前日比±3%（大幅高/安）・±5%（急騰/急落） |
 | **出来高** | 過去平均の1.5倍以上でスパイク検知 |
 | **日中位置** | 高値圏（高値-1%以内）/ 安値圏（安値+1%以内） |
 | **ATR** | 14日ATRの2倍超で高ボラティリティ |
 | **連続方向** | 3日以上の続騰 / 続落 |
-| **52週** | 52週高値圏 / 52週安値圏 |
 
 シグナル列にスコアで判定：🟢 買い優勢 / 🔴 売り優勢。フィルターボタンで絞り込み可能。
+
+### 📶 表示シグナルの種類選択
+- 📶 ボタンで11カテゴリのシグナル表示をON/OFF切り替え
+- 全ON / 全OFF の一括操作にも対応
+- 設定はブラウザストレージに永続保存
 
 ### 📉 スパークライン（ミニチャート）
 - 各銘柄行にスパークラインチャートを表示
@@ -133,10 +142,10 @@ tse-stock/
 │   ├── style.css               # ダークテーマ + CSS Grid
 │   ├── main.js                 # エントリポイント・イベント統合
 │   └── lib/                    # ES モジュール群
-│       ├── constants.js        # 定数（列定義・ラベル等）
+│       ├── constants.js        # 定数（列定義・シグナルカテゴリ等）
 │       ├── state.js            # 状態管理・永続化
 │       ├── audio.js            # 音声・OS通知
-│       ├── indicators.js       # 指標計算・表示ヘルパー
+│       ├── indicators.js       # 指標計算・シグナルフィルター
 │       ├── columns.js          # 列の表示/非表示・並び順管理
 │       ├── sticky.js           # ピン留め列の sticky 配置
 │       ├── tabs.js             # タブ管理
@@ -150,6 +159,7 @@ tse-stock/
 │       ├── main.rs             # エントリポイント
 │       ├── lib.rs              # Tauri コマンド登録
 │       └── stock.rs            # 株価取得・指標計算・シグナル判定
+├── bump-version.mjs            # バージョン自動カウントアップスクリプト
 ├── package.json
 ├── vite.config.js
 └── .gitignore
@@ -162,16 +172,22 @@ tse-stock/
 - [Node.js](https://nodejs.org/) 18+
 - Windows: [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)（通常はOSに組み込み済み）
 
-### ソースからビルド
+### ソースからビルド（バージョン自動カウントアップ）
 
 ```bash
 git clone https://github.com/yumebi/tse-stock.git
 cd tse-stock
 npm install
-npm run tauri build
+npm run build:release
 ```
 
-ビルド後の実行ファイルは `src-tauri/target/release/tse-stock.exe` に生成されます。
+`build:release` はビルドのたびにパッチバージョンを自動インクリメントします（例: 1.0.3 → 1.0.4）。
+
+### 通常ビルド（バージョンを変えない場合）
+
+```bash
+npm run tauri build
+```
 
 ### 開発モード（ホットリロード）
 
