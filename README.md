@@ -12,13 +12,23 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 git clone https://github.com/yumebi/tse-stock.git
 ```
 
-| 形式 | パス | サイズ |
-|---|---|---|
-| **NSIS インストーラー** | `src-tauri/target/release/bundle/nsis/YMB TSE Stock_1.0.3_x64-setup.exe` | ~3 MB |
-| MSI インストーラー | `src-tauri/target/release/bundle/msi/YMB TSE Stock_1.0.3_x64_en-US.msi` | ~4 MB |
-| ポータブル版 | `src-tauri/target/release/tse-stock.exe` | ~11 MB |
+#### Windows
+
+| 形式 | パス |
+|---|---|
+| **NSIS インストーラー** | `src-tauri/target/release/bundle/nsis/YMB TSE Stock_1.0.3_x64-setup.exe` |
+| MSI インストーラー | `src-tauri/target/release/bundle/msi/YMB TSE Stock_1.0.3_x64_en-US.msi` |
+| ポータブル版 | `src-tauri/target/release/tse-stock.exe` |
 
 > ※ Windows Defender が警告を出す場合があります。「詳細情報」→「実行」で起動してください。
+
+#### macOS
+
+| 形式 | パス |
+|---|---|
+| **DMG** | `src-tauri/target/release/bundle/YMB TSE Stock_1.0.3_universal.dmg` |
+
+> ※ 初回起動時に「開発元を確認できません」と表示される場合は、右クリック →「開く」で起動してください。
 
 ## 機能
 
