@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
 
 import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS, SIG_CATEGORIES } from "./lib/constants.js";
 import {
@@ -46,6 +47,14 @@ const win = getCurrentWindow();
 const WIN_KEY = "tse-stock-window";
 async function restoreWindow() { try { const r = localStorage.getItem(WIN_KEY); if (!r) return; const { x, y, w, h } = JSON.parse(r); if (x != null) await win.setPosition({ x, y }); if (w > 400) await win.setSize({ width: w, height: h }); } catch (_) {} }
 function saveWindowPos() { Promise.all([win.outerPosition(), win.outerSize()]).then(([p, s]) => { localStorage.setItem(WIN_KEY, JSON.stringify({ x: p.x, y: p.y, w: s.width, h: s.height })); }).catch(() => {}); }
+
+getVersion().then(v => {
+  const title = `YMB TSE Stock v${v} - 東証株価`;
+  win.setTitle(title);
+  document.title = title;
+  const h1 = document.querySelector("h1");
+  if (h1) h1.textContent = `YMB TSE Stock v${v}`;
+}).catch(() => {});
 
 // ===== invokeParams ヘルパー =====
 function stockInvokeParams(code) {
