@@ -172,7 +172,7 @@ tse-stock/
 - [Node.js](https://nodejs.org/) 18+
 - Windows: [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)（通常はOSに組み込み済み）
 
-### ソースからビルド（バージョン自動カウントアップ）
+### ソースからビルド
 
 ```bash
 git clone https://github.com/yumebi/tse-stock.git
@@ -181,13 +181,13 @@ npm install
 npm run build:release
 ```
 
-`build:release` はビルドのたびにパッチバージョンを自動インクリメントします（例: 1.0.3 → 1.0.4）。
-
-### 通常ビルド（バージョンを変えない場合）
+### プッシュ（バージョン自動カウントアップ）
 
 ```bash
-npm run tauri build
+npm run push:release
 ```
+
+`push:release` はパッチバージョンを自動インクリメントしてコミット・プッシュします（例: 1.0.3 → 1.0.4）。ビルド後に実行してください。
 
 ### 開発モード（ホットリロード）
 
