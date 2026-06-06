@@ -2,63 +2,43 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-// ===== カラム定義 =====
-// 全カラム定義。movable=true は移動可能（◀▶表示）。toggle は非表示切替対象。
-const ALL_COLS = [
-  { k: "reorder", w: "48px", label: "" },
-  { k: "code", w: "70px", label: "コード", movable: true },
-  { k: "name", w: "0.7fr", label: "企業名", movable: true },
-  { k: "price", w: "105px", label: "現在株価", movable: true },
-  { k: "spark", w: "70px", label: "5日", movable: true, toggle: "spark" },
-  { k: "change", w: "120px", label: "前日比", movable: true, toggle: "change" },
-  { k: "prev", w: "105px", label: "前日終値", movable: true, toggle: "prev" },
-  { k: "open", w: "100px", label: "始値", movable: true },
-  { k: "high", w: "95px", label: "高値", movable: true, toggle: "hl" },
-  { k: "low", w: "95px", label: "安値", movable: true, toggle: "hl" },
-  { k: "volume", w: "80px", label: "出来高", movable: true, toggle: "volume" },
-  { k: "ma5", w: "72px", label: "MA5", movable: true, toggle: "ma" },
-  { k: "ma25", w: "72px", label: "MA25", movable: true, toggle: "ma" },
-  { k: "ma75", w: "72px", label: "MA75", movable: true, toggle: "ma" },
-  { k: "macd", w: "68px", label: "MACD", movable: true, toggle: "ind" },
-  { k: "sig", w: "55px", label: "Sig", movable: true, toggle: "ind" },
-  { k: "rsi", w: "52px", label: "RSI", movable: true, toggle: "rsi" },
-  { k: "score", w: "58px", label: "判定", movable: true, toggle: "score" },
-  { k: "signals", w: "1fr", label: "シグナル", movable: true },
-  { k: "del", w: "28px", label: "" },
-];
+import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS } from "./lib/constants.js";
+import {
+  state, priceFlash,
+  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveNotes, savePortfolio,
+  getNameCache, saveNameCache,
+  stocks, setStocks,
+  hash, detectSignalChange,
+} from "./lib/state.js";
+import { signalBeep, alertBeep, initNotifications, sendOsNotification } from "./lib/audio.js";
+import { scoreSignals, scoreText } from "./lib/indicators.js";
+import { visibleCols, getGroupOrder, moveGroup } from "./lib/columns.js";
+import { initSticky, applySticky, scheduleNameAutoSize } from "./lib/sticky.js";
+import { initTabs, renderTabs, addTab, deleteTab } from "./lib/tabs.js";
+import { initRender, initRenderHelpers, render, renderCell, updateSigScroll } from "./lib/render.js";
 
-const TOGGLE_KEYS = new Set(ALL_COLS.filter(c => c.toggle).map(c => c.toggle));
-const MOVABLE_KEYS = ALL_COLS.filter(c => c.movable).map(c => c.k);
+// ===== DOM =====
+const stockList      = document.getElementById("stock-list");
+const stockCodeInput = document.getElementById("stock-code-input");
+const addBtn         = document.getElementById("add-btn");
+const pauseBtn       = document.getElementById("pause-btn");
+const refreshBtn     = document.getElementById("refresh-btn");
+const exportBtn      = document.getElementById("export-btn");
+const importBtn      = document.getElementById("import-btn");
+const intervalSel    = document.getElementById("interval-sel");
+const statusMsg      = document.getElementById("status-msg");
+const tableHeader    = document.querySelector(".table-header");
+const tabsEl         = document.getElementById("tabs");
+const colPanelBtn    = document.getElementById("col-panel-btn");
+const addTabBtn      = document.getElementById("add-tab-btn");
+const idxN225        = document.getElementById("idx-n225");
+const marketStatus   = document.getElementById("market-status");
+const densityBtn     = document.getElementById("density-btn");
+const pinBtn         = document.getElementById("pin-btn");
+const sparkSel       = document.getElementById("spark-sel");
 
-// ===== 状態 =====
-const state = {
-  tabs: [], activeTabIdx: 0, sortKey: null, sortAsc: true, paused: false, prevSignals: {},
-  hiddenToggles: new Set(JSON.parse(localStorage.getItem("tse-stock-hide") || "[]")),
-  colOrder: JSON.parse(localStorage.getItem("tse-stock-col-order") || JSON.stringify(MOVABLE_KEYS)),
-};
-
-function saveColState() {
-  localStorage.setItem("tse-stock-hide", JSON.stringify([...state.hiddenToggles]));
-  localStorage.setItem("tse-stock-col-order", JSON.stringify(state.colOrder));
-}
-
-function visibleCols() {
-  const orderMap = new Map(state.colOrder.map((k, i) => [k, i]));
-  const byCol = new Map(ALL_COLS.map(c => [c.k, c]));
-  const result = [];
-  for (const col of ALL_COLS) {
-    if (!col.movable) { result.push(col); continue; }
-    if (col.toggle && state.hiddenToggles.has(col.toggle)) continue;
-    result.push(col);
-  }
-  result.sort((a, b) => {
-    if (!a.movable && !b.movable) return 0;
-    if (!a.movable) return -1;
-    if (!b.movable) return 1;
-    return (orderMap.get(a.k) ?? 999) - (orderMap.get(b.k) ?? 999);
-  });
-  return result;
-}
+// ===== ヘルパー =====
+function setStatus(m, e) { statusMsg.textContent = m; statusMsg.style.color = e ? "#f85149" : "#8b949e"; }
 
 // ===== ウィンドウ =====
 const win = getCurrentWindow();
@@ -66,231 +46,563 @@ const WIN_KEY = "tse-stock-window";
 async function restoreWindow() { try { const r = localStorage.getItem(WIN_KEY); if (!r) return; const { x, y, w, h } = JSON.parse(r); if (x != null) await win.setPosition({ x, y }); if (w > 400) await win.setSize({ width: w, height: h }); } catch (_) {} }
 function saveWindowPos() { Promise.all([win.outerPosition(), win.outerSize()]).then(([p, s]) => { localStorage.setItem(WIN_KEY, JSON.stringify({ x: p.x, y: p.y, w: s.width, h: s.height })); }).catch(() => {}); }
 
-// ===== 音声 =====
-let audioCtx = null;
-function beep(f, d, t = "sine") { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = t; o.frequency.value = f; g.gain.setValueAtTime(0.1, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + d); } catch (_) {} }
-function signalBeep(buy) { if (buy) { beep(880, 0.15); setTimeout(() => beep(1100, 0.2), 150); } else { beep(440, 0.15); setTimeout(() => beep(330, 0.25), 150); } }
-const hash = ss => (ss || []).join("|") || "_empty";
-function detectSignals(code, ns) { const oh = state.prevSignals[code] || "_init", nh = hash(ns); if (oh === "_init") { state.prevSignals[code] = nh; return; } if (oh === nh) return; state.prevSignals[code] = nh; signalBeep(ns.some(s => s.includes("買い") || s.includes("GC") || s.includes("上抜"))); }
-
-// ===== DOM =====
-const stockList = document.getElementById("stock-list");
-const stockCodeInput = document.getElementById("stock-code-input");
-const addBtn = document.getElementById("add-btn");
-const pauseBtn = document.getElementById("pause-btn");
-const exportBtn = document.getElementById("export-btn");
-
-const statusMsg = document.getElementById("status-msg");
-const tableHeader = document.querySelector(".table-header");
-const tabsEl = document.getElementById("tabs");
-const addTabBtn = document.getElementById("add-tab-btn");
-const idxN225 = document.getElementById("idx-n225");
-const idxTopx = document.getElementById("idx-topx");
-
-// ===== 永続化 =====
-const DEFAULT_STOCKS = ["7203", "8306", "9984"];
-function saveAll() { localStorage.setItem("tse-stock-tabs", JSON.stringify(state.tabs.map(t => ({ name: t.name, codes: t.stocks.map(s => s.code) })))); localStorage.setItem("tse-stock-active", state.activeTabIdx); }
-function loadAll() { try { const r = localStorage.getItem("tse-stock-tabs"); if (r) { const td = JSON.parse(r); if (Array.isArray(td) && td.length > 0) return td; } } catch (_) {} return [{ name: "デイトレ", codes: DEFAULT_STOCKS }, { name: "長期", codes: [] }]; }
-const NAME_CACHE_KEY = "tse-stock-names";
-function getNameCache() { try { return JSON.parse(localStorage.getItem(NAME_CACHE_KEY) || "{}"); } catch (_) { return {}; } }
-function saveNameCache(c) { localStorage.setItem(NAME_CACHE_KEY, JSON.stringify(c)); }
-
-// ===== ヘルパー =====
-function setStatus(m, e) { statusMsg.textContent = m; statusMsg.style.color = e ? "#f85149" : "#8b949e"; }
-const fmt = n => n != null ? n.toLocaleString() : "-";
-const fmtPct = n => n != null ? (n >= 0 ? "+" : "") + n.toFixed(2) + "%" : "-";
-const fmtOpt = (n, s) => n != null ? n.toLocaleString() + (s || "") : "-";
-function sparkline(cl) { if (!cl || cl.length < 2) return ""; const w = 64, h = 22, p = 2, mn = Math.min(...cl), mx = Math.max(...cl), r = mx - mn || 1; const pts = cl.map((v, i) => { const x = p + (i / (cl.length - 1)) * (w - p * 2), y = p + (1 - (v - mn) / r) * (h - p * 2); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" "); const up = cl[cl.length - 1] >= cl[0]; return `<svg width="${w}" height="${h}"><polyline points="${pts}" fill="none" stroke="${up ? "#3fb950" : "#f85149"}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
-function volClass(s) { if (!s._volAvg || s._volAvg <= 0) return ""; const r = s.volume / s._volAvg; if (r >= 3) return "vol-hot3"; if (r >= 2) return "vol-hot2"; if (r >= 1.5) return "vol-hot1"; if (r >= 1) return "vol-normal"; return "vol-cold"; }
-function gradClass(pct) { const a = Math.abs(pct); if (a >= 5) return pct > 0 ? "g-up4" : "g-down4"; if (a >= 3) return pct > 0 ? "g-up3" : "g-down3"; if (a >= 1) return pct > 0 ? "g-up2" : "g-down2"; if (a > 0) return pct > 0 ? "g-up1" : "g-down1"; return ""; }
-function scoreSignals(sigs) { let buy = 0, sell = 0; for (const s of sigs || []) { if (s.includes("GC") || s.includes("買い") || s.includes("上抜") || s.includes("続騰")) buy++; if (s.includes("DC") || s.includes("売り") || s.includes("下抜") || s.includes("続落") || s.includes("買われ")) sell++; } return { buy, sell }; }
-function scoreClass(sigs) { const { buy, sell } = scoreSignals(sigs); const net = buy - sell; if (net > 0) return "bullish"; if (net < 0) return "bearish"; return "neutral"; }
-function scoreText(sigs) { const { buy, sell } = scoreSignals(sigs); if (buy === 0 && sell === 0) return "-"; return `🟢${buy} 🔴${sell}`; }
-
-// ===== セル生成 =====
-function renderCell(s, k, fl) {
-  const up = s.change >= 0, rsiC = s.rsi != null ? (s.rsi > 70 ? "over" : s.rsi < 30 ? "under" : "") : "";
-  switch (k) {
-    case "reorder": return `<span class="cell-reorder"><button class="reorder-btn up" data-code="${s.code}">▲</button><button class="reorder-btn down" data-code="${s.code}">▼</button></span>`;
-    case "code": return `<span class="cell-code">${s.code}</span>`;
-    case "name": {
-      const nc = getNameCache(); const nJ = nc[s.code] || s.nameJa;
-      const nm = nJ ? `<span class="ja">${nJ}</span><span class="en">${s.name}</span>` : s.name;
-      return `<span class="cell-name" title="${nJ || s.name}">${nm}</span>`;
-    }
-    case "price": return `<span class="cell-price ${fl}">¥${fmt(s.price)}</span>`;
-    case "spark": return `<span class="cell-spark">${sparkline(s.recentCloses)}</span>`;
-    case "change": return `<span class="cell-change ${up ? "up" : "down"} ${gradClass(s.changePercent)}">${fmtPct(s.changePercent)} (${fmt(s.change)})</span>`;
-    case "prev": return `<span class="cell-prev">¥${fmt(s.prevClose)}</span>`;
-    case "open": return `<span class="cell-open">¥${fmt(s.open)}</span>`;
-    case "high": return `<span class="cell-hl">¥${fmt(s.high)}${s.highTime ? `<span class="time">${s.highTime}</span>` : ""}</span>`;
-    case "low": return `<span class="cell-hl">¥${fmt(s.low)}${s.lowTime ? `<span class="time">${s.lowTime}</span>` : ""}</span>`;
-    case "volume": return `<span class="cell-volume ${volClass(s)}">${fmt(s.volume)}</span>`;
-    case "ma5": return `<span class="cell-ma ma5">${fmtOpt(s.ma5)}</span>`;
-    case "ma25": return `<span class="cell-ma ma25">${fmtOpt(s.ma25)}</span>`;
-    case "ma75": return `<span class="cell-ma ma75">${fmtOpt(s.ma75)}</span>`;
-    case "macd": return `<span class="cell-ind">${fmtOpt(s.macd)}</span>`;
-    case "sig": return `<span class="cell-ind">${fmtOpt(s.macdSignal)}</span>`;
-    case "rsi": return `<span class="cell-rsi ${rsiC}">${fmtOpt(s.rsi)}</span>`;
-    case "score": return `<span class="cell-score ${scoreClass(s.signals)}">${scoreText(s.signals)}</span>`;
-    case "signals": return `<span class="cell-sig">${s.signals?.length ? `<span class="sig-inner">${s.signals.join(" ⏺ ")} ⏺ ${s.signals.join(" ⏺ ")}</span>` : ""}</span>`;
-    case "del": return `<span class="cell-del"><button class="del-btn" data-code="${s.code}">×</button></span>`;
-  }
-  return "";
+// ===== invokeParams ヘルパー =====
+function stockInvokeParams(code) {
+  const nc = getNameCache();
+  return { code, knownName: nc[code] ?? null, needIntradayCloses: state.sparkPeriod === "1d" };
 }
 
-// ===== stocks =====
-function stocks() { return state.tabs[state.activeTabIdx]?.stocks || []; }
-function setStocks(arr) { if (state.tabs[state.activeTabIdx]) state.tabs[state.activeTabIdx].stocks = arr; }
+// ===== ソート =====
+function sortArr(arr) {
+  if (!state.sortKey) return arr;
+  const k = state.sortKey, asc = state.sortAsc;
+  if (k === "_score") {
+    return [...arr].sort((a, b) => {
+      const { buy: ba, sell: sa } = scoreSignals(a.signals);
+      const { buy: bb, sell: sb } = scoreSignals(b.signals);
+      return asc ? (ba - sa) - (bb - sb) : (bb - sb) - (ba - sa);
+    });
+  }
+  if (k === "_w52hi") {
+    return [...arr].sort((a, b) => {
+      const va = a.week52High ? (a.price / a.week52High - 1) * 100 : null;
+      const vb = b.week52High ? (b.price / b.week52High - 1) * 100 : null;
+      if (va == null && vb == null) return 0; if (va == null) return asc ? 1 : -1; if (vb == null) return asc ? -1 : 1;
+      return asc ? va - vb : vb - va;
+    });
+  }
+  if (k === "_w52lo") {
+    return [...arr].sort((a, b) => {
+      const va = a.week52Low ? (a.price / a.week52Low - 1) * 100 : null;
+      const vb = b.week52Low ? (b.price / b.week52Low - 1) * 100 : null;
+      if (va == null && vb == null) return 0; if (va == null) return asc ? 1 : -1; if (vb == null) return asc ? -1 : 1;
+      return asc ? va - vb : vb - va;
+    });
+  }
+  if (k === "_pnl") {
+    return [...arr].sort((a, b) => {
+      const pfa = state.portfolio[a.code], pfb = state.portfolio[b.code];
+      const va = pfa?.cost && pfa?.qty ? (a.price - pfa.cost) * pfa.qty : null;
+      const vb = pfb?.cost && pfb?.qty ? (b.price - pfb.cost) * pfb.qty : null;
+      if (va == null && vb == null) return 0; if (va == null) return asc ? 1 : -1; if (vb == null) return asc ? -1 : 1;
+      return asc ? va - vb : vb - va;
+    });
+  }
+  return [...arr].sort((a, b) => {
+    let va = a[k], vb = b[k];
+    if (va == null) va = asc ? "￿" : ""; if (vb == null) vb = asc ? "￿" : "";
+    if (typeof va === "string") return asc ? va.localeCompare(vb, "ja") : vb.localeCompare(va, "ja");
+    return asc ? va - vb : vb - va;
+  });
+}
+
+// ===== 列パネル =====
+const colPanel = (() => { const el = document.createElement("div"); el.id = "col-panel"; document.body.appendChild(el); return el; })();
+
+function renderColPanel() {
+  const groupOrder = getGroupOrder();
+  const labelMap = new Map(TOGGLE_LABELS);
+  colPanel.innerHTML = groupOrder.map((key, i) => {
+    const isFirst = i === 0, isLast = i === groupOrder.length - 1;
+    return `<div class="col-toggle-item">
+      <input type="checkbox" data-toggle="${key}"${state.hiddenToggles.has(key) ? "" : " checked"}>
+      <span class="col-toggle-label">${labelMap.get(key) || key}</span>
+      <span class="col-toggle-arrows">
+        <button class="col-move-btn" data-key="${key}" data-dir="-1"${isFirst ? " disabled" : ""}>▲</button>
+        <button class="col-move-btn" data-key="${key}" data-dir="1"${isLast ? " disabled" : ""}>▼</button>
+      </span>
+    </div>`;
+  }).join("");
+  colPanel.querySelectorAll("input[data-toggle]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (cb.checked) state.hiddenToggles.delete(cb.dataset.toggle);
+      else state.hiddenToggles.add(cb.dataset.toggle);
+      saveColState(); render();
+    });
+  });
+  colPanel.querySelectorAll(".col-move-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      moveGroup(btn.dataset.key, parseInt(btn.dataset.dir), saveColState, render, renderColPanel);
+    });
+  });
+}
+
+colPanelBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  if (colPanel.classList.contains("open")) { colPanel.classList.remove("open"); return; }
+  renderColPanel();
+  const r = colPanelBtn.getBoundingClientRect();
+  colPanel.style.top = (r.bottom + 4) + "px";
+  colPanel.style.right = (window.innerWidth - r.right) + "px";
+  colPanel.classList.add("open");
+});
+
+// ===== アラートパネル =====
+const alertPanel = (() => { const el = document.createElement("div"); el.id = "alert-panel"; document.body.appendChild(el); return el; })();
+let _alertCode = null;
+
+function openAlertPanel(code, anchorEl) {
+  _alertCode = code;
+  const al = state.alerts[code] || {};
+  alertPanel.innerHTML = `
+    <div class="alert-panel-title">🔔 アラート設定 <span class="alert-code">${code}</span></div>
+    <label>上値アラート<input type="number" id="alert-hi" placeholder="設定なし" value="${al.hi ?? ""}" min="0" step="1"></label>
+    <label>下値アラート<input type="number" id="alert-lo" placeholder="設定なし" value="${al.lo ?? ""}" min="0" step="1"></label>
+    <div class="alert-panel-btns">
+      <button id="alert-save-btn">保存</button>
+      <button id="alert-clear-btn">クリア</button>
+    </div>`;
+  const r = anchorEl.getBoundingClientRect();
+  alertPanel.style.top = (r.bottom + 4) + "px";
+  alertPanel.style.left = Math.min(r.left, window.innerWidth - 230) + "px";
+  alertPanel.classList.add("open");
+  alertPanel.querySelector("#alert-save-btn").addEventListener("click", () => {
+    const hi = parseFloat(alertPanel.querySelector("#alert-hi").value);
+    const lo = parseFloat(alertPanel.querySelector("#alert-lo").value);
+    state.alerts[_alertCode] = { hi: isNaN(hi) ? null : hi, lo: isNaN(lo) ? null : lo };
+    saveAlerts(); alertPanel.classList.remove("open"); render();
+  });
+  alertPanel.querySelector("#alert-clear-btn").addEventListener("click", () => {
+    delete state.alerts[_alertCode];
+    saveAlerts(); alertPanel.classList.remove("open"); render();
+  });
+}
+alertPanel.addEventListener("click", e => e.stopPropagation());
+
+// ===== メモパネル =====
+const notePanel = (() => { const el = document.createElement("div"); el.id = "note-panel"; document.body.appendChild(el); return el; })();
+let _noteCode = null;
+
+function openNotePanel(code, anchorEl) {
+  _noteCode = code;
+  const note = state.notes[code] || "";
+  notePanel.innerHTML = `
+    <div class="note-panel-title">📝 メモ <span class="note-code">${code}</span></div>
+    <textarea id="note-text" rows="4" placeholder="メモを入力...">${note}</textarea>
+    <div class="note-panel-btns">
+      <button id="note-save-btn">保存</button>
+      <button id="note-clear-btn">クリア</button>
+    </div>`;
+  const r = anchorEl.getBoundingClientRect();
+  notePanel.style.top = (r.bottom + 4) + "px";
+  notePanel.style.left = Math.min(r.left, window.innerWidth - 260) + "px";
+  notePanel.classList.add("open");
+  notePanel.querySelector("#note-text").focus();
+  notePanel.querySelector("#note-save-btn").addEventListener("click", () => {
+    const text = notePanel.querySelector("#note-text").value.trim();
+    if (text) state.notes[_noteCode] = text; else delete state.notes[_noteCode];
+    saveNotes(); notePanel.classList.remove("open"); render();
+  });
+  notePanel.querySelector("#note-clear-btn").addEventListener("click", () => {
+    delete state.notes[_noteCode];
+    saveNotes(); notePanel.classList.remove("open"); render();
+  });
+}
+notePanel.addEventListener("click", e => e.stopPropagation());
+
+// ===== ポートフォリオパネル =====
+const portfolioPanel = (() => { const el = document.createElement("div"); el.id = "portfolio-panel"; document.body.appendChild(el); return el; })();
+let _portfolioCode = null;
+
+function openPortfolioPanel(code, anchorEl) {
+  _portfolioCode = code;
+  const pf = state.portfolio[code] || {};
+  const s = stocks().find(x => x.code === code);
+  const curPrice = s?.price;
+  let previewHtml = "";
+  if (pf.cost && pf.qty && curPrice) {
+    const pnl = (curPrice - pf.cost) * pf.qty;
+    const pnlPct = ((curPrice - pf.cost) / pf.cost) * 100;
+    const cls = pnl >= 0 ? "up" : "down";
+    previewHtml = `<div class="pf-preview">
+      <div>評価額: <b>¥${(curPrice * pf.qty).toLocaleString()}</b></div>
+      <div>含み損益: <span class="pf-${cls}">${pnl >= 0 ? "+" : ""}¥${Math.round(pnl).toLocaleString()} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)</span></div>
+    </div>`;
+  }
+  portfolioPanel.innerHTML = `
+    <div class="pf-panel-title">💼 ポートフォリオ <span class="pf-code">${code}</span></div>
+    <label>取得単価（円）<input type="number" id="pf-cost" placeholder="例: 2500" value="${pf.cost ?? ""}" min="0" step="1"></label>
+    <label>保有株数<input type="number" id="pf-qty" placeholder="例: 100" value="${pf.qty ?? ""}" min="0" step="100"></label>
+    ${previewHtml}
+    <div class="pf-panel-btns">
+      <button id="pf-save-btn">保存</button>
+      <button id="pf-clear-btn">クリア</button>
+    </div>`;
+  const r = anchorEl.getBoundingClientRect();
+  portfolioPanel.style.top = (r.bottom + 4) + "px";
+  portfolioPanel.style.left = Math.min(r.left, window.innerWidth - 240) + "px";
+  portfolioPanel.classList.add("open");
+  portfolioPanel.querySelector("#pf-cost").focus();
+  portfolioPanel.querySelector("#pf-save-btn").addEventListener("click", () => {
+    const cost = parseFloat(portfolioPanel.querySelector("#pf-cost").value);
+    const qty  = parseInt(portfolioPanel.querySelector("#pf-qty").value, 10);
+    if (!isNaN(cost) && !isNaN(qty) && cost > 0 && qty > 0) {
+      state.portfolio[_portfolioCode] = { cost, qty };
+    } else {
+      delete state.portfolio[_portfolioCode];
+    }
+    savePortfolio(); portfolioPanel.classList.remove("open"); render();
+  });
+  portfolioPanel.querySelector("#pf-clear-btn").addEventListener("click", () => {
+    delete state.portfolio[_portfolioCode];
+    savePortfolio(); portfolioPanel.classList.remove("open"); render();
+  });
+}
+portfolioPanel.addEventListener("click", e => e.stopPropagation());
+
+// ===== インポートモーダル =====
+const importModal = (() => { const el = document.createElement("div"); el.id = "import-modal"; document.body.appendChild(el); return el; })();
+
+function openImportModal() {
+  importModal.innerHTML = `
+    <div class="import-box">
+      <div class="import-title">📋 銘柄を一括インポート</div>
+      <div class="import-desc">銘柄コードをカンマ・改行・スペース区切りで入力してください</div>
+      <textarea id="import-text" rows="6" placeholder="7203, 8306, 9984&#10;6758&#10;4755 2413"></textarea>
+      <div class="import-btns">
+        <button id="import-exec-btn">追加</button>
+        <button id="import-cancel-btn">キャンセル</button>
+      </div>
+      <div id="import-status"></div>
+    </div>`;
+  importModal.classList.add("open");
+  importModal.addEventListener("click", () => importModal.classList.remove("open"));
+  importModal.querySelector(".import-box").addEventListener("click", e => e.stopPropagation());
+  importModal.querySelector("#import-text").focus();
+  importModal.querySelector("#import-cancel-btn").addEventListener("click", () => importModal.classList.remove("open"));
+  importModal.querySelector("#import-exec-btn").addEventListener("click", async () => {
+    const raw = importModal.querySelector("#import-text").value;
+    const codes = [...new Set(raw.split(/[\s,、\n]+/).map(s => s.trim()).filter(s => /^\d{4}$/.test(s)))];
+    const statusEl = importModal.querySelector("#import-status");
+    if (codes.length === 0) { statusEl.textContent = "有効な4桁コードが見つかりません"; return; }
+    statusEl.textContent = `0 / ${codes.length} 追加中...`;
+    let ok = 0; const ng = [];
+    for (const code of codes) {
+      if (stocks().find(s => s.code === code)) { ok++; statusEl.textContent = `${ok} / ${codes.length} 処理中...`; continue; }
+      try {
+        const data = await invoke("fetch_stock_cmd", stockInvokeParams(code));
+        const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); }
+        data._volAvg = data.volume; stocks().push(data); state.prevSignals[code] = hash(data.signals);
+        ok++; statusEl.textContent = `${ok} / ${codes.length} 処理中...`;
+      } catch (_) { ng.push(code); }
+    }
+    saveAll(); render();
+    scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+    statusEl.textContent = `完了: ${ok}件追加${ng.length ? `、取得失敗: ${ng.join(", ")}` : ""}`;
+  });
+}
+
+importBtn.addEventListener("click", openImportModal);
 
 // ===== 指数 =====
 async function fetchIndices() {
-  try { const n225 = await invoke("fetch_index_cmd", { symbol: "^N225" }); idxN225.innerHTML = `日経 ${n225.price.toLocaleString()} <span class="${n225.change >= 0 ? 'up' : 'down'}">${n225.change >= 0 ? '+' : ''}${n225.changePercent.toFixed(2)}%</span>`; } catch (_) { idxN225.innerHTML = "日経 ---"; }
-  idxTopx.remove(); // TOPIX not available on Yahoo Finance
+  try {
+    const n225 = await invoke("fetch_index_cmd", { symbol: "^N225" });
+    idxN225.innerHTML = `日経 ${n225.price.toLocaleString()} <span class="${n225.change >= 0 ? "up" : "down"}">${n225.change >= 0 ? "+" : ""}${n225.changePercent.toFixed(2)}%</span>`;
+  } catch (_) { idxN225.innerHTML = "日経 ---"; }
 }
 
 // ===== CSV =====
 function exportCSV() {
   const arr = stocks(); if (arr.length === 0) return;
-  const headers = ["コード", "企業名", "現在株価", "前日比%", "前日比", "前日終値", "始値", "高値", "安値", "出来高", "MA5", "MA25", "MA75", "MACD", "Sig", "RSI", "判定"];
-  const rows = arr.map(s => [s.code, s.nameJa || s.name, s.price, s.changePercent?.toFixed(2), s.change, s.prevClose, s.open, s.high, s.low, s.volume, s.ma5?.toFixed(2), s.ma25?.toFixed(2), s.ma75?.toFixed(2), s.macd?.toFixed(4), s.macdSignal?.toFixed(4), s.rsi?.toFixed(1), scoreText(s.signals)]);
-  const csv = [headers, ...rows].map(r => r.map(c => `"${(c ?? '').toString().replace(/"/g, '""')}"`).join(",")).join("\n");
+  const headers = ["コード", "企業名", "現在株価", "前日比%", "前日比", "前日終値", "始値", "高値", "安値", "出来高", "MA5", "MA25", "MA75", "MACD", "Sig", "RSI", "判定", "52週高値", "52週安値", "52高乖離%", "52安乖離%"];
+  const rows = arr.map(s => {
+    const w52hDev = s.week52High ? ((s.price / s.week52High - 1) * 100).toFixed(1) : "";
+    const w52lDev = s.week52Low  ? ((s.price / s.week52Low  - 1) * 100).toFixed(1) : "";
+    return [s.code, s.nameJa || s.name, s.price, s.changePercent?.toFixed(2), s.change, s.prevClose, s.open, s.high, s.low, s.volume, s.ma5?.toFixed(2), s.ma25?.toFixed(2), s.ma75?.toFixed(2), s.macd?.toFixed(4), s.macdSignal?.toFixed(4), s.rsi?.toFixed(1), scoreText(s.signals), s.week52High, s.week52Low, w52hDev, w52lDev];
+  });
+  const csv = [headers, ...rows].map(r => r.map(c => `"${(c ?? "").toString().replace(/"/g, '""')}"`).join(",")).join("\n");
   const filename = `tse-stock-${new Date().toISOString().slice(0, 10)}.csv`;
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
   URL.revokeObjectURL(a.href);
   setStatus(`CSVエクスポート完了: ${filename}`, false);
 }
 
-// ===== ソート / カラム移動 =====
-const SORT_KEYS = { "col-code": { key: "code" }, "col-name": { key: "nameJa" }, "col-price": { key: "price" }, "col-change": { key: "change" }, "col-open": { key: "open" }, "col-volume": { key: "volume" }, "col-rsi": { key: "rsi" } };
+// ===== ソートヘッダーイベント =====
 tableHeader.addEventListener("click", e => {
-  // ◀▶ column reorder
-  const arw = e.target.closest(".col-arrow");
-  if (arw) {
-    const key = arw.dataset.key, dir = arw.dataset.dir, i = state.colOrder.indexOf(key);
-    if (dir === "left" && i > 0) { [state.colOrder[i - 1], state.colOrder[i]] = [state.colOrder[i], state.colOrder[i - 1]]; saveColState(); render(); }
-    if (dir === "right" && i < state.colOrder.length - 1) { [state.colOrder[i], state.colOrder[i + 1]] = [state.colOrder[i + 1], state.colOrder[i]]; saveColState(); render(); }
-    return;
-  }
   const sp = e.target.closest("span"); if (!sp) return;
   const cls = [...sp.classList].find(c => SORT_KEYS[c]); if (!cls || !SORT_KEYS[cls].key) return;
   const sk = SORT_KEYS[cls];
-  if (state.sortKey === sk.key) state.sortAsc = !state.sortAsc;
-  else { state.sortKey = sk.key; state.sortAsc = true; }
+  if (state.sortKey === sk.key) state.sortAsc = !state.sortAsc; else { state.sortKey = sk.key; state.sortAsc = true; }
   render();
-});
-function sortArr(arr) { if (!state.sortKey) return arr; const k = state.sortKey, asc = state.sortAsc; return [...arr].sort((a, b) => { let va = a[k], vb = b[k]; if (va == null) va = asc ? "\uffff" : ""; if (vb == null) vb = asc ? "\uffff" : ""; if (typeof va === "string") return asc ? va.localeCompare(vb, "ja") : vb.localeCompare(va, "ja"); return asc ? va - vb : vb - va; }); }
-
-// ===== タブ =====
-function renderTabs() { tabsEl.innerHTML = state.tabs.map((t, i) => `<button class="tab-btn${i === state.activeTabIdx ? " active" : ""}" data-idx="${i}">${t.name}${state.tabs.length > 1 ? `<span class="tab-del" data-idx="${i}">×</span>` : ""}</button>`).join(""); tabsEl.querySelectorAll(".tab-btn").forEach(b => { b.addEventListener("click", e => { if (e.target.classList.contains("tab-del")) { deleteTab(parseInt(e.target.dataset.idx)); return; } switchTab(parseInt(b.dataset.idx)); }); }); }
-function switchTab(idx) { state.activeTabIdx = idx; state.sortKey = null; state.sortAsc = true; saveAll(); renderTabs(); render(); }
-function addTab() { const name = `リスト${state.tabs.length + 1}`; state.tabs.push({ name, stocks: [] }); state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); }
-function deleteTab(idx) { if (state.tabs.length <= 1) return; state.tabs.splice(idx, 1); if (state.activeTabIdx >= state.tabs.length) state.activeTabIdx = state.tabs.length - 1; saveAll(); renderTabs(); render(); }
-
-// ===== レンダリング =====
-const priceFlash = {};
-
-function render() {
-  const stks = stocks();
-  if (stks.length === 0) { stockList.innerHTML = `<div class="empty-state">銘柄がありません。上の入力欄からコードを追加してください。</div>`; tableHeader.style.gridTemplateColumns = ""; return; }
-
-  const cols = visibleCols();
-  const gridTpl = cols.map(c => c.w).join(" ");
-  tableHeader.style.gridTemplateColumns = gridTpl;
-
-  // header with ◀▶ for toggleable cols
-  tableHeader.innerHTML = cols.map((c, ci) => {
-    const sortCls = c.k === "code" ? " col-code sortable" : c.k === "name" ? " col-name sortable" : c.k === "price" ? " col-price sortable" : c.k === "change" ? " col-change sortable" : c.k === "open" ? " col-open sortable" : c.k === "volume" ? " col-volume sortable" : c.k === "rsi" ? " col-rsi sortable" : "";
-    const tgBtns = c.movable ? `<button class="col-arrow col-left" data-key="${c.k}" data-dir="left">◀</button><button class="col-arrow col-right" data-key="${c.k}" data-dir="right">▶</button>` : "";
-    return `<span class="${c.k === "reorder" ? "col-reorder" : ""}${sortCls}">${tgBtns}${c.label}</span>`;
-  }).join("");
-
-  // rows
-  const sorted = sortArr(stks);
-  stockList.innerHTML = sorted.map((s, i) => {
-    const fl = priceFlash[s.code] ? "flash-" + priceFlash[s.code] : "";
-    const isF = i === 0, isL = i === sorted.length - 1;
-    // temporarily modify for first/last reorder buttons
-    const codeBackup = s.code;
-    const cells = cols.map(c => renderCell(s, c.k, fl)).join("");
-    // Fix: disable up/down for first/last
-    const rowDiv = document.createElement("div");
-    rowDiv.innerHTML = cells;
-    const upBtn = rowDiv.querySelector(".reorder-btn.up");
-    const downBtn = rowDiv.querySelector(".reorder-btn.down");
-    if (upBtn && isF) upBtn.setAttribute("disabled", "");
-    if (downBtn && isL) downBtn.setAttribute("disabled", "");
-    return `<div class="stock-row" data-code="${codeBackup}" style="grid-template-columns:${gridTpl}">${rowDiv.innerHTML}</div>`;
-  }).join("");
-
-  for (const c of Object.keys(priceFlash)) delete priceFlash[c];
-
-  // sort indicator
-  tableHeader.querySelectorAll("span").forEach(s => s.classList.remove("sort-asc", "sort-desc"));
-  if (state.sortKey) {
-    for (const [cls, sk] of Object.entries(SORT_KEYS)) {
-      if (sk.key === state.sortKey) { const sp = tableHeader.querySelector(`.${cls}`); if (sp) sp.classList.add(state.sortAsc ? "sort-asc" : "sort-desc"); break; }
-    }
-  }
-}
-
-stockList.addEventListener("click", e => {
-  const upB = e.target.closest(".reorder-btn.up"), dnB = e.target.closest(".reorder-btn.down"), delB = e.target.closest(".del-btn");
-  const arr = stocks();
-  if (upB && !upB.disabled) { const c = upB.dataset.code, i = arr.findIndex(s => s.code === c); if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; setStocks(arr); saveAll(); render(); } }
-  else if (dnB && !dnB.disabled) { const c = dnB.dataset.code, i = arr.findIndex(s => s.code === c); if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; setStocks(arr); saveAll(); render(); } }
-  else if (delB) { removeStock(delB.dataset.code); }
 });
 
 // ===== 銘柄操作 =====
-async function addStock(code) { code = code.trim(); if (!code) return; const arr = stocks(); if (arr.find(s => s.code === code)) { setStatus(`${code} は既に追加済み`, true); return; } setStatus(`${code} 取得中...`, false); try { const data = await invoke("fetch_stock_cmd", { code }); const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); } data._volAvg = data.volume; arr.push(data); setStocks(arr); saveAll(); render(); setStatus(`${code} 追加完了`, false); } catch (e) { setStatus(`${code} の取得に失敗: ${e}`, true); } }
-function removeStock(code) { const arr = stocks(); setStocks(arr.filter(s => s.code !== code)); delete state.prevSignals[code]; saveAll(); render(); }
+async function addStock(code) {
+  code = code.trim(); if (!code) return;
+  const arr = stocks(); if (arr.find(s => s.code === code)) { setStatus(`${code} は既に追加済み`, true); return; }
+  setStatus(`${code} 取得中...`, false);
+  try {
+    const data = await invoke("fetch_stock_cmd", stockInvokeParams(code));
+    const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); }
+    data._volAvg = data.volume; arr.push(data); setStocks(arr); saveAll(); render();
+    scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+    setStatus(`${code} 追加完了`, false);
+  } catch (e) { setStatus(`${code} の取得に失敗: ${e}`, true); }
+}
+function removeStock(code) {
+  const arr = stocks(); setStocks(arr.filter(s => s.code !== code));
+  delete state.prevSignals[code]; delete state.priceDirs[code];
+  delete state.alerts[code]; delete state.notes[code];
+  saveAll(); saveAlerts(); saveNotes(); render();
+  scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+}
 
 // ===== 一時停止 =====
-pauseBtn.addEventListener("click", () => { state.paused = !state.paused; pauseBtn.textContent = state.paused ? "▶" : "⏸"; pauseBtn.classList.toggle("paused", state.paused); setStatus(state.paused ? "自動更新停止中" : "自動更新再開", false); });
+pauseBtn.addEventListener("click", () => {
+  state.paused = !state.paused;
+  pauseBtn.textContent = state.paused ? "▶" : "⏸";
+  pauseBtn.classList.toggle("paused", state.paused);
+  setStatus(state.paused ? "自動更新停止中" : "自動更新再開", false);
+});
 
-// ===== イベント =====
+// ===== 密度 =====
+function applyDensity() {
+  document.body.classList.remove("density-compact", "density-large");
+  if (state.density !== "normal") document.body.classList.add("density-" + state.density);
+  if (densityBtn) densityBtn.textContent = DENSITY_LABELS[state.density] || "標準";
+}
+
+if (densityBtn) {
+  densityBtn.addEventListener("click", () => {
+    state.density = DENSITY_NEXT[state.density] || "normal";
+    localStorage.setItem("tse-stock-density", state.density);
+    applyDensity();
+  });
+}
+
+document.querySelectorAll(".filter-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    state.signalFilter = btn.dataset.filter;
+    localStorage.setItem("tse-stock-filter", state.signalFilter);
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === state.signalFilter));
+    render();
+  });
+});
+
+if (pinBtn) {
+  pinBtn.addEventListener("click", () => {
+    state.pinCols = !state.pinCols;
+    localStorage.setItem("tse-stock-pin", state.pinCols);
+    pinBtn.classList.toggle("active", state.pinCols);
+    applySticky();
+  });
+}
+
+if (sparkSel) {
+  sparkSel.value = state.sparkPeriod;
+  sparkSel.addEventListener("change", () => {
+    state.sparkPeriod = sparkSel.value;
+    localStorage.setItem("tse-stock-spark", state.sparkPeriod);
+    render();
+  });
+}
+
+// ===== 一括更新 =====
+async function fetchAll() {
+  if (state.paused || stocks().length === 0) return;
+  const arr = stocks();
+  let sigBuy = false, sigSell = false, anyOk = false;
+  for (const s of arr) {
+    try {
+      const op = s.price;
+      const data = await invoke("fetch_stock_cmd", stockInvokeParams(s.code));
+      const pj = s.nameJa; Object.assign(s, data); if (!s.nameJa && pj) s.nameJa = pj;
+      if (!s._volAvg) s._volAvg = s.volume; else s._volAvg = s._volAvg * 0.9 + s.volume * 0.1;
+      if (data.price > op) { priceFlash[s.code] = "up"; state.priceDirs[s.code] = "up"; }
+      else if (data.price < op) { priceFlash[s.code] = "down"; state.priceDirs[s.code] = "down"; }
+      else { delete state.priceDirs[s.code]; }
+      const ch = detectSignalChange(s.code, data.signals);
+      if (ch === "buy") sigBuy = true; else if (ch === "sell") sigSell = true;
+      const al = state.alerts[s.code];
+      if (al && op != null) {
+        if (al.hi != null && op < al.hi && data.price >= al.hi) {
+          alertBeep(true);
+          const msg = `🔔 ${s.code} 上値アラート ¥${al.hi.toLocaleString()} 到達`;
+          setStatus(msg, false);
+          sendOsNotification(`TSE Stock: ${s.code} 上値アラート`, `現在価格 ¥${data.price.toLocaleString()} が ¥${al.hi.toLocaleString()} に到達`);
+        }
+        if (al.lo != null && op > al.lo && data.price <= al.lo) {
+          alertBeep(false);
+          const msg = `🔔 ${s.code} 下値アラート ¥${al.lo.toLocaleString()} 到達`;
+          setStatus(msg, false);
+          sendOsNotification(`TSE Stock: ${s.code} 下値アラート`, `現在価格 ¥${data.price.toLocaleString()} が ¥${al.lo.toLocaleString()} に到達`);
+        }
+      }
+      anyOk = true;
+    } catch (_) {}
+  }
+  render(); fetchIndices();
+  if (anyOk && (sigBuy || sigSell)) signalBeep(sigBuy);
+  if (state.signalFilter === "all") setStatus(`更新完了 ${new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`, false);
+}
+
+// ===== 市場時間・更新間隔 =====
+function isMarketOpen() {
+  const jst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const day = jst.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = jst.getHours() * 60 + jst.getMinutes();
+  return mins >= 540 && mins < 930; // 9:00〜15:30（2024年11月〜昼休みなし）
+}
+function getEffectiveInterval() { return isMarketOpen() ? state.interval : Math.max(state.interval, 300); }
+
+function updateMarketStatus() {
+  const open = isMarketOpen();
+  const eff = getEffectiveInterval();
+  marketStatus.textContent = open ? "開場中" : "時間外";
+  marketStatus.className = "market-status " + (open ? "open" : "closed");
+  const m = Math.floor(eff / 60), s = eff % 60;
+  marketStatus.title = `更新間隔: ${m > 0 ? m + "分" : ""}${s > 0 ? s + "秒" : ""}`;
+}
+
+let _intervalId = null;
+
+async function scheduleTick() {
+  await fetchAll();
+  updateMarketStatus();
+  _intervalId = setTimeout(scheduleTick, getEffectiveInterval() * 1000);
+}
+
+function restartInterval() {
+  if (_intervalId) { clearTimeout(_intervalId); _intervalId = null; }
+  updateMarketStatus();
+  _intervalId = setTimeout(scheduleTick, getEffectiveInterval() * 1000);
+}
+
+intervalSel.value = String(state.interval);
+intervalSel.addEventListener("change", () => {
+  state.interval = parseInt(intervalSel.value);
+  localStorage.setItem("tse-stock-interval", state.interval);
+  restartInterval();
+});
+
+refreshBtn.addEventListener("click", async () => {
+  if (stocks().length === 0) return;
+  setStatus("更新中...", false);
+  await fetchAll();
+});
+
 addBtn.addEventListener("click", async () => { const c = stockCodeInput.value.trim(); if (!c) return; stockCodeInput.value = ""; await addStock(c); });
 stockCodeInput.addEventListener("keydown", e => { if (e.key === "Enter") addBtn.click(); });
 addTabBtn.addEventListener("click", addTab);
 exportBtn.addEventListener("click", exportCSV);
 
+// ===== イベント =====
+stockList.addEventListener("click", e => {
+  const upB = e.target.closest(".reorder-btn.up"), dnB = e.target.closest(".reorder-btn.down");
+  const delB = e.target.closest(".del-btn");
+  const alertEl = e.target.closest(".cell-alert"), noteEl = e.target.closest(".cell-note"), pnlEl = e.target.closest(".cell-pnl");
+  const arr = stocks();
+  if (upB && !upB.disabled) {
+    const i = arr.findIndex(s => s.code === upB.dataset.code);
+    if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; setStocks(arr); saveAll(); render(); }
+  } else if (dnB && !dnB.disabled) {
+    const i = arr.findIndex(s => s.code === dnB.dataset.code);
+    if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; setStocks(arr); saveAll(); render(); }
+  } else if (delB) {
+    removeStock(delB.dataset.code);
+  } else if (alertEl) {
+    e.stopPropagation();
+    alertPanel.classList.remove("open"); notePanel.classList.remove("open"); portfolioPanel.classList.remove("open");
+    openAlertPanel(alertEl.dataset.code, alertEl);
+  } else if (noteEl) {
+    e.stopPropagation();
+    notePanel.classList.remove("open"); alertPanel.classList.remove("open"); portfolioPanel.classList.remove("open");
+    openNotePanel(noteEl.dataset.code, noteEl);
+  } else if (pnlEl) {
+    e.stopPropagation();
+    portfolioPanel.classList.remove("open"); alertPanel.classList.remove("open"); notePanel.classList.remove("open");
+    openPortfolioPanel(pnlEl.dataset.code, pnlEl);
+  }
+});
+
+document.addEventListener("click", () => {
+  colPanel.classList.remove("open");
+  alertPanel.classList.remove("open");
+  notePanel.classList.remove("open");
+  portfolioPanel.classList.remove("open");
+});
+
+stockList.addEventListener("mouseover", e => {
+  const cell = e.target.closest(".cell-sig");
+  if (cell && !cell.contains(e.relatedTarget)) cell.querySelector(".sig-inner")?.getAnimations()[0]?.pause();
+});
+stockList.addEventListener("mouseout", e => {
+  const cell = e.target.closest(".cell-sig");
+  if (cell && !cell.contains(e.relatedTarget)) cell.querySelector(".sig-inner")?.getAnimations()[0]?.play();
+});
+
 // ===== 初期化 =====
+const DEFAULT_STOCKS = ["7203", "8306", "9984"];
+
 async function init() {
+  // モジュールのDOMref初期化
+  initSticky(tableHeader, stockList);
+  initRender(tableHeader, stockList);
+  initRenderHelpers(setStatus, sortArr);
+  initTabs(tabsEl, render, saveAll);
+
   restoreWindow();
+  applyDensity();
+  if (pinBtn) pinBtn.classList.toggle("active", state.pinCols);
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === state.signalFilter));
+  if (sparkSel) sparkSel.value = state.sparkPeriod;
+
   const td = loadAll();
   state.tabs = td.map(t => ({ name: t.name, stocks: [] }));
   state.activeTabIdx = Math.min(parseInt(localStorage.getItem("tse-stock-active") || 0), state.tabs.length - 1);
   renderTabs();
   const codes = td[state.activeTabIdx]?.codes || DEFAULT_STOCKS;
   for (const code of codes) {
-    try { const data = await invoke("fetch_stock_cmd", { code }); const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); } data._volAvg = data.volume; stocks().push(data); state.prevSignals[code] = hash(data.signals); } catch (e) { setStatus(`${code} 失敗: ${e}`, true); }
+    try {
+      const data = await invoke("fetch_stock_cmd", stockInvokeParams(code));
+      const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); }
+      data._volAvg = data.volume; stocks().push(data); state.prevSignals[code] = hash(data.signals);
+    } catch (e) { setStatus(`${code} 失敗: ${e}`, true); }
   }
-  saveAll();
-  render();
+  saveAll(); render();
+  scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
   setStatus(stocks().length > 0 ? "完了" : "取得できませんでした", stocks().length === 0);
   fetchIndices();
+  restartInterval();
+  await initNotifications();
 }
 
-// ===== 定期更新 =====
-setInterval(async () => {
-  if (state.paused || stocks().length === 0) return;
-  const arr = stocks();
-  for (const s of arr) {
-    try { const op = s.price; const data = await invoke("fetch_stock_cmd", { code: s.code }); const pj = s.nameJa; Object.assign(s, data); if (!s.nameJa && pj) s.nameJa = pj; if (!s._volAvg) s._volAvg = s.volume; else s._volAvg = s._volAvg * 0.9 + s.volume * 0.1; if (data.price > op) priceFlash[s.code] = "up"; else if (data.price < op) priceFlash[s.code] = "down"; detectSignals(s.code, data.signals); } catch (_) {}
-  }
-  render();
-  fetchIndices();
-  setStatus(`更新完了 ${new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`, false);
-}, 30000);
-
 // ===== ウィンドウ保存 =====
-let saveT; async function onWC() { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); }
-win.onResized(onWC); win.onMoved(onWC);
+let saveT;
+win.onResized(() => { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); });
+win.onMoved(() => { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); });
 
 // ===== 進捗イベント =====
 listen("stock-progress", e => { const { code, step } = e.payload; setStatus(`${code}: ${step}`, false); });
 
+// ===== 凡例ツールチップ =====
+const legTip = document.getElementById("leg-tip");
+if (legTip) {
+  document.querySelectorAll(".leg-item[data-tip]").forEach(el => {
+    el.addEventListener("mouseenter", e => {
+      legTip.textContent = el.dataset.tip;
+      legTip.style.display = "block";
+      placeLegTip(e);
+    });
+    el.addEventListener("mousemove", placeLegTip);
+    el.addEventListener("mouseleave", () => { legTip.style.display = "none"; });
+  });
+  function placeLegTip(e) {
+    const tw = legTip.offsetWidth, th = legTip.offsetHeight;
+    const x = Math.max(8, Math.min(e.clientX - tw / 2, window.innerWidth - tw - 8));
+    const y = e.clientY - th - 14;
+    legTip.style.left = x + "px";
+    legTip.style.top = (y < 8 ? e.clientY + 16 : y) + "px";
+  }
+}
+
 // ===== 起動 =====
 init();
+
+// ===== シグナル列のリサイズ監視 =====
+let _sigResizeT;
+new ResizeObserver(() => { clearTimeout(_sigResizeT); _sigResizeT = setTimeout(updateSigScroll, 100); }).observe(stockList);

@@ -19,12 +19,38 @@
       </div>
       <div id="index-display">
         <span id="idx-n225" class="idx-item">日経 ---</span>
+        <span id="market-status" class="market-status"></span>
       </div>
       <div id="add-stock">
         <input type="text" id="stock-code-input" placeholder="銘柄コード（例: 7203）" />
         <button id="add-btn">追加</button>
         <button id="pause-btn" title="自動更新の停止/再開">⏸</button>
+        <button id="refresh-btn" title="今すぐ更新">🔄</button>
+        <select id="interval-sel" title="更新間隔">
+          <option value="15">15秒</option>
+          <option value="30">30秒</option>
+          <option value="60">1分</option>
+          <option value="120">2分</option>
+          <option value="300">5分</option>
+        </select>
+        <button id="col-panel-btn" title="列の表示/非表示">☰</button>
+        <button id="import-btn" title="銘柄を一括インポート">📋</button>
         <button id="export-btn" title="CSVエクスポート">📥</button>
+        <button id="density-btn" title="行の高さ切替">標準</button>
+        <select id="spark-sel" title="チャート期間">
+          <option value="1d">1日</option>
+          <option value="3d">3日</option>
+          <option value="1mo">1月</option>
+          <option value="3mo">3月</option>
+          <option value="6mo">6月</option>
+          <option value="1y">1年</option>
+        </select>
+        <button id="pin-btn" title="コード・企業名列を固定">📌</button>
+        <span class="filter-group">
+          <button class="filter-btn active" data-filter="all" title="全銘柄表示">全</button>
+          <button class="filter-btn" data-filter="buy" title="買いシグナル優勢のみ">🟢</button>
+          <button class="filter-btn" data-filter="sell" title="売りシグナル優勢のみ">🔴</button>
+        </span>
       </div>
       <div id="status-msg"></div>
     </div>
@@ -55,16 +81,20 @@
     </div>
   </div>
   <div id="legend">
-    <span class="leg-item" title="移動平均線（5日）"><i class="leg-dot" style="background:#58a6ff"></i>MA5</span>
-    <span class="leg-item" title="移動平均線（25日）"><i class="leg-dot" style="background:#3fb950"></i>MA25</span>
-    <span class="leg-item" title="移動平均線（75日）"><i class="leg-dot" style="background:#f0883e"></i>MA75</span>
-    <span class="leg-item" title="MACD(12,26) — シグナル線を上抜けで買い"><i class="leg-dot" style="background:#e6edf3"></i>MACD</span>
-    <span class="leg-item" title="MACDシグナル(9) — MACDがSigを上抜けで買い"><i class="leg-dot" style="background:#8b949e"></i>Sig</span>
-    <span class="leg-item" title="RSI(14)≧70 買われすぎ（売りサイン）"><i class="leg-dot" style="background:#f85149"></i>RSI≧70</span>
-    <span class="leg-item" title="RSI(14)≦30 売られすぎ（買いサイン）"><i class="leg-dot" style="background:#58a6ff"></i>RSI≦30</span>
-    <span class="leg-item" title="ボリンジャーバンド(20日,±2σ) 上限/下限タッチ"><i class="leg-dot" style="background:#bc8cff"></i>BB±2σ</span>
-    <span class="leg-item" title="出来高が過去平均の1.5倍以上"><i class="leg-dot" style="background:#e6edf3"></i>出来高増</span>
+    <span class="leg-item" data-tip="【MA5】5日移動平均線&#10;直近5営業日の終値の平均。短期トレンドの基準。&#10;株価がMA5を上抜けると短期上昇サイン。&#10;MA5 > MA25 の並びが強気の基本形。"><i class="leg-dot" style="background:#58a6ff"></i>MA5</span>
+    <span class="leg-item" data-tip="【MA25】25日移動平均線（約1ヶ月）&#10;中期トレンドの基準線。機関投資家も注目。&#10;株価がMA25を上抜けると中期上昇傾向。&#10;MA25がMA75を上抜けるとゴールデンクロス（買い）。"><i class="leg-dot" style="background:#3fb950"></i>MA25</span>
+    <span class="leg-item" data-tip="【MA75】75日移動平均線（約3ヶ月）&#10;中長期トレンドを判断する重要な線。&#10;株価がMA75を下抜けると中長期の下落トレンド入りを示す。&#10;MA25がMA75を下抜けるとデッドクロス（売り）。"><i class="leg-dot" style="background:#f0883e"></i>MA75</span>
+    <span class="leg-item" data-tip="【MACD】Moving Average Convergence Divergence&#10;12日EMA − 26日EMAの差。&#10;・0ラインを上抜け → 強気転換のサイン&#10;・シグナル線を下から上抜け → 買いサイン&#10;・ヒストグラムがプラスで拡大中 → 上昇勢いあり"><i class="leg-dot" style="background:#e6edf3"></i>MACD</span>
+    <span class="leg-item" data-tip="【Sig】MACDシグナル線（MACDの9日EMA）&#10;MACDの9日間指数移動平均。&#10;・MACDがSigを下から上抜け → ゴールデンクロス（買い）&#10;・MACDがSigを上から下抜け → デッドクロス（売り）"><i class="leg-dot" style="background:#8b949e"></i>Sig</span>
+    <span class="leg-item" data-tip="【RSI ≧ 70】買われすぎゾーン&#10;RSI（14日）が70以上で過熱感あり。&#10;反落・売りのサインとされることが多い。&#10;80以上では特に注意。ただしトレンド相場では&#10;高値圏が続くこともある。"><i class="leg-dot" style="background:#f85149"></i>RSI≧70</span>
+    <span class="leg-item" data-tip="【RSI ≦ 30】売られすぎゾーン&#10;RSI（14日）が30以下で売られすぎ状態。&#10;反発・買いのサインとされることが多い。&#10;20以下では特に反発期待が高まる。&#10;ただし下落トレンドでは低値圏が続く場合もある。"><i class="leg-dot" style="background:#58a6ff"></i>RSI≦30</span>
+    <span class="leg-item" data-tip="【BB ±2σ】ボリンジャーバンド（20日, ±2σ）&#10;20日移動平均 ± 標準偏差×2の上下バンド。&#10;・上限（+2σ）タッチ → 反落・売りのサイン&#10;・下限（−2σ）タッチ → 反発・買いのサイン&#10;価格の約95%がこのバンド内に収まる。"><i class="leg-dot" style="background:#bc8cff"></i>BB±2σ</span>
+    <span class="leg-item" data-tip="【出来高増加】&#10;直近の出来高が過去平均の1.5倍以上。&#10;相場の転換点や重要な価格変動を示すことが多い。&#10;・上昇＋出来高増 → 強い買いサイン&#10;・下落＋出来高増 → 強い売りサイン（投げ売り）"><i class="leg-dot" style="background:#e6edf3"></i>出来高増</span>
+    <span class="leg-item" data-tip="【シグナル列】各種テクニカルシグナルの一覧&#10;🟢 GC / MACD上抜け / RSI売られすぎ → 買いサイン&#10;🔴 DC / MACD下抜け → 売りサイン&#10;🟠 RSI買われすぎ（>70）&#10;🔵 RSI売られすぎ（&lt;30）&#10;🟣 ボリンジャーバンド±2σ タッチ&#10;📊 出来高急増&#10;🔺高値圏 / 🔻安値圏&#10;🚀急騰 / 💥急落（前日比±5%以上）&#10;⚡高ボラティリティ（ATR×2超）&#10;🔥N日続騰 / ❄N日続落"><i class="leg-dot" style="background:linear-gradient(135deg,#3fb950 50%,#f85149 50%)"></i>シグナル</span>
+    <span class="leg-item" data-tip="【52高】52週高値（過去1年の高値）からの乖離率&#10;緑（-5%以内）: 52週高値圏。上値抵抗を試す水準&#10;グレー（-25%以内）: 中間圏&#10;赤（-25%超）: 52週高値から大きく下落した水準&#10;マウスオーバーで実際の52週高値を表示"><i class="leg-dot" style="background:#3fb950"></i>52高</span>
+    <span class="leg-item" data-tip="【52安】52週安値（過去1年の安値）からの上昇率&#10;赤（+20%以内）: 52週安値圏。下値支持を試す水準&#10;グレー（+80%以内）: 中間圏&#10;緑（+80%超）: 52週安値から大きく上昇した水準&#10;マウスオーバーで実際の52週安値を表示"><i class="leg-dot" style="background:#f85149"></i>52安</span>
   </div>
+  <div id="leg-tip"></div>
   <script type="module" src="/main.js"></script>
 </body>
 </html>
