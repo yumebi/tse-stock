@@ -1,4 +1,4 @@
-import { MOVABLE_KEYS, NEW_MOVABLE_KEYS, SIG_CATEGORIES } from "./constants.js";
+import { MOVABLE_KEYS, NEW_MOVABLE_KEYS, SIG_CATEGORIES, MARKET_SESSION_DEFAULT } from "./constants.js";
 
 // ===== 状態 =====
 export const state = {
@@ -20,6 +20,10 @@ export const state = {
     const defaults = Object.fromEntries(SIG_CATEGORIES.map(c => [c.key, true]));
     return saved ? { ...defaults, ...saved } : defaults;
   })(),
+  marketSession: (() => {
+    const saved = JSON.parse(localStorage.getItem("tse-stock-market-session") || "null");
+    return saved ? { ...MARKET_SESSION_DEFAULT, ...saved } : { ...MARKET_SESSION_DEFAULT };
+  })(),
 };
 
 // colOrder に新列が含まれていない場合は末尾に追加
@@ -37,7 +41,8 @@ export function saveColWidths()  { localStorage.setItem("tse-stock-col-widths", 
 export function saveAlerts()     { localStorage.setItem("tse-stock-alerts", JSON.stringify(state.alerts)); }
 export function saveNotes()      { localStorage.setItem("tse-stock-notes", JSON.stringify(state.notes)); }
 export function savePortfolio()  { localStorage.setItem("tse-stock-portfolio", JSON.stringify(state.portfolio)); }
-export function saveSigCats()    { localStorage.setItem("tse-stock-sig-cats", JSON.stringify(state.sigCats)); }
+export function saveSigCats()       { localStorage.setItem("tse-stock-sig-cats", JSON.stringify(state.sigCats)); }
+export function saveMarketSession() { localStorage.setItem("tse-stock-market-session", JSON.stringify(state.marketSession)); }
 
 const NAME_CACHE_KEY = "tse-stock-names";
 export function getNameCache() { try { return JSON.parse(localStorage.getItem(NAME_CACHE_KEY) || "{}"); } catch (_) { return {}; } }

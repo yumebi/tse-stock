@@ -1,30 +1,33 @@
 // ===== カラム定義 =====
 export const ALL_COLS = [
-  { k: "reorder",  w: "36px",   label: "" },
-  { k: "code",     w: "70px",   label: "コード",   movable: true, toggle: "code" },
-  { k: "name",     w: "minmax(80px, 0.7fr)",  label: "企業名",   movable: true, toggle: "name" },
-  { k: "price",    w: "105px",  label: "現在株価", movable: true, toggle: "price" },
-  { k: "spark",    w: "70px",   label: "5日",      movable: true, toggle: "spark" },
-  { k: "change",   w: "120px",  label: "前日比",   movable: true, toggle: "change" },
-  { k: "prev",     w: "105px",  label: "前日終値", movable: true, toggle: "prev" },
-  { k: "open",     w: "100px",  label: "始値",     movable: true, toggle: "open" },
-  { k: "high",     w: "95px",   label: "高値",     movable: true, toggle: "hl" },
-  { k: "low",      w: "95px",   label: "安値",     movable: true, toggle: "hl" },
-  { k: "volume",   w: "80px",   label: "出来高",   movable: true, toggle: "volume" },
-  { k: "ma5",      w: "72px",   label: "MA5",      movable: true, toggle: "ma" },
-  { k: "ma25",     w: "72px",   label: "MA25",     movable: true, toggle: "ma" },
-  { k: "ma75",     w: "72px",   label: "MA75",     movable: true, toggle: "ma" },
-  { k: "macd",     w: "68px",   label: "MACD",     movable: true, toggle: "ind" },
-  { k: "sig",      w: "55px",   label: "Sig",      movable: true, toggle: "ind" },
-  { k: "rsi",      w: "52px",   label: "RSI",      movable: true, toggle: "rsi" },
-  { k: "score",    w: "58px",   label: "判定",     movable: true, toggle: "score" },
-  { k: "signals",  w: "minmax(120px, 1fr)",    label: "シグナル", movable: true, toggle: "signals" },
-  { k: "w52hi",    w: "64px",   label: "52高",     movable: true, toggle: "w52" },
-  { k: "w52lo",    w: "64px",   label: "52安",     movable: true, toggle: "w52" },
-  { k: "pnl",      w: "88px",   label: "損益",     movable: true, toggle: "pnl" },
-  { k: "alert",    w: "72px",   label: "アラート", movable: true, toggle: "alert" },
-  { k: "note",     w: "32px",   label: "メモ",     movable: true, toggle: "note" },
-  { k: "del",      w: "28px",   label: "" },
+  { k: "reorder",    w: "36px",                  label: "" },
+  { k: "code",       w: "70px",                  label: "コード",    movable: true, toggle: "code" },
+  { k: "name",       w: "minmax(80px, 0.7fr)",   label: "企業名",    movable: true, toggle: "name" },
+  { k: "price",      w: "105px",                 label: "現在株価",  movable: true, toggle: "price" },
+  { k: "spark",      w: "70px",                  label: "5日",       movable: true, toggle: "spark" },
+  { k: "change",     w: "120px",                 label: "前日比",    movable: true, toggle: "change" },
+  { k: "prev",       w: "105px",                 label: "前日終値",  movable: true, toggle: "prev" },
+  { k: "open",       w: "100px",                 label: "始値",      movable: true, toggle: "open" },
+  { k: "high",       w: "95px",                  label: "高値",      movable: true, toggle: "hl" },
+  { k: "low",        w: "95px",                  label: "安値",      movable: true, toggle: "hl" },
+  { k: "volume",     w: "80px",                  label: "出来高",    movable: true, toggle: "volume" },
+  { k: "ma5",        w: "72px",                  label: "MA5",       movable: true, toggle: "ma" },
+  { k: "ma25",       w: "72px",                  label: "MA25",      movable: true, toggle: "ma" },
+  { k: "ma75",       w: "72px",                  label: "MA75",      movable: true, toggle: "ma" },
+  { k: "macd",       w: "68px",                  label: "MACD",      movable: true, toggle: "ind" },
+  { k: "sig",        w: "55px",                  label: "Sig",       movable: true, toggle: "ind" },
+  { k: "rsi",        w: "52px",                  label: "RSI",       movable: true, toggle: "rsi" },
+  { k: "score",      w: "58px",                  label: "判定",      movable: true, toggle: "score" },
+  { k: "signals",    w: "minmax(120px, 1fr)",    label: "シグナル",  movable: true, toggle: "signals" },
+  { k: "w52hi",      w: "64px",                  label: "52高",      movable: true, toggle: "w52" },
+  { k: "w52lo",      w: "64px",                  label: "52安",      movable: true, toggle: "w52" },
+  { k: "creditRatio",w: "60px",                  label: "信用倍率",  movable: true, toggle: "credit" },
+  { k: "marginBuy",  w: "72px",                  label: "買い残",    movable: true, toggle: "credit" },
+  { k: "marginSell", w: "72px",                  label: "売り残",    movable: true, toggle: "credit" },
+  { k: "pnl",        w: "88px",                  label: "損益",      movable: true, toggle: "pnl" },
+  { k: "alert",      w: "72px",                  label: "アラート",  movable: true, toggle: "alert" },
+  { k: "note",       w: "32px",                  label: "メモ",      movable: true, toggle: "note" },
+  { k: "del",        w: "28px",                  label: "" },
 ];
 
 export const TOGGLE_LABELS = [
@@ -43,6 +46,7 @@ export const TOGGLE_LABELS = [
   ["score",   "判定"],
   ["signals", "シグナル"],
   ["w52",     "52週高値/安値"],
+  ["credit",  "信用倍率 / 信用残高"],
   ["pnl",     "損益（ポートフォリオ）"],
   ["alert",   "価格アラート"],
   ["note",    "銘柄メモ"],
@@ -50,7 +54,16 @@ export const TOGGLE_LABELS = [
 
 export const MOVABLE_KEYS = ALL_COLS.filter(c => c.movable).map(c => c.k);
 
-export const NEW_MOVABLE_KEYS = ["w52hi", "w52lo", "pnl"];
+export const NEW_MOVABLE_KEYS = ["w52hi", "w52lo", "creditRatio", "marginBuy", "marginSell", "pnl"];
+
+// ===== 取引時間デフォルト =====
+export const MARKET_SESSION_DEFAULT = {
+  open:       "09:00",
+  close:      "15:30",
+  lunch:      false,
+  lunchStart: "11:30",
+  lunchEnd:   "12:30",
+};
 
 export const SORT_KEYS = {
   "col-code":   { key: "code" },
