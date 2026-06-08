@@ -290,7 +290,8 @@ async fn fetch_credit(client: &reqwest::Client, code: &str) -> (Option<f64>, Opt
 
     // 「信用取引」テーブルの最初の <tbody><tr> 内の td[0]=売り残, td[1]=買い残, td[2]=倍率
     fn parse_credit(html: &str) -> Option<(f64, f64, f64)> {
-        let base = html.find("信用取引")?;
+        // metaタグの「信用取引」を避け、テーブル直近の「単位:千株」で位置を特定
+        let base = html.find("単位:千株")?;
         let tail = &html[base..];
         let tbody = tail.find("<tbody>")?;
         let row_start = tail[tbody..].find("<tr>")? + tbody;
