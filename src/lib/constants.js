@@ -63,6 +63,7 @@ export const MARKET_SESSION_DEFAULT = {
   lunch:      false,
   lunchStart: "11:30",
   lunchEnd:   "12:30",
+  allDay:     false,
 };
 
 export const SORT_KEYS = {
