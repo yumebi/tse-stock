@@ -89,6 +89,19 @@ export function renderCell(s, k, fl, rowOpts = {}) {
     case "rsi": return `<span class="cell-rsi ${rsiC}">${fmtOpt(s.rsi)}</span>`;
     case "score": return `<span class="cell-score ${scoreClass(s.signals)}">${scoreText(s.signals)}</span>`;
     case "signals": { const fs = filterSigs(s.signals); const text = fs.length ? fs.join(" ⏺ ") : ""; return `<span class="cell-sig">${text ? `<span class="sig-inner" data-sig-text="${text.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}">${text}</span>` : ""}</span>`; }
+    case "creditRatio": {
+      if (s.creditRatio == null) return `<span class="cell-credit">-</span>`;
+      const cls = s.creditRatio >= 5 ? "ratio-high" : s.creditRatio <= 0.5 ? "ratio-low" : "";
+      return `<span class="cell-credit ${cls}" title="信用倍率: ${s.creditRatio}倍">${s.creditRatio.toFixed(2)}倍</span>`;
+    }
+    case "marginBuy": {
+      if (s.marginBuy == null) return `<span class="cell-credit">-</span>`;
+      return `<span class="cell-credit" title="信用買い残: ${s.marginBuy}万株">${s.marginBuy.toFixed(1)}万</span>`;
+    }
+    case "marginSell": {
+      if (s.marginSell == null) return `<span class="cell-credit">-</span>`;
+      return `<span class="cell-credit" title="信用売り残: ${s.marginSell}万株">${s.marginSell.toFixed(1)}万</span>`;
+    }
     case "w52hi": {
       if (!s.week52High || !s.price) return `<span class="cell-w52">-</span>`;
       const dev = ((s.price / s.week52High) - 1) * 100;

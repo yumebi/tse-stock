@@ -3,10 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 
-import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS, SIG_CATEGORIES } from "./lib/constants.js";
+import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS, SIG_CATEGORIES, MARKET_SESSION_DEFAULT } from "./lib/constants.js";
 import {
   state, priceFlash,
-  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveNotes, savePortfolio, saveSigCats,
+  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveNotes, savePortfolio, saveSigCats, saveMarketSession,
   getNameCache, saveNameCache,
   stocks, setStocks,
   hash, detectSignalChange,
@@ -142,6 +142,7 @@ colPanelBtn.addEventListener("click", e => {
   e.stopPropagation();
   if (colPanel.classList.contains("open")) { colPanel.classList.remove("open"); return; }
   sigCatPanel.classList.remove("open");
+  marketSessionPanel.classList.remove("open");
   renderColPanel();
   const r = colPanelBtn.getBoundingClientRect();
   colPanel.style.top = (r.bottom + 4) + "px";
@@ -189,11 +190,70 @@ sigCatBtn.addEventListener("click", e => {
   e.stopPropagation();
   if (sigCatPanel.classList.contains("open")) { sigCatPanel.classList.remove("open"); return; }
   colPanel.classList.remove("open");
+  marketSessionPanel.classList.remove("open");
   renderSigCatPanel();
   const r = sigCatBtn.getBoundingClientRect();
   sigCatPanel.style.top = (r.bottom + 4) + "px";
   sigCatPanel.style.right = (window.innerWidth - r.right) + "px";
   sigCatPanel.classList.add("open");
+});
+
+// ===== 市場時間設定パネル =====
+const marketSessionBtn   = document.getElementById("market-session-btn");
+const marketSessionPanel = (() => { const el = document.createElement("div"); el.id = "market-session-panel"; document.body.appendChild(el); return el; })();
+
+function renderMarketSessionPanel() {
+  const ms = state.marketSession;
+  marketSessionPanel.innerHTML = `
+    <div class="ms-header">取引時間設定</div>
+    <label class="ms-row">開場<input type="time" id="ms-open"  value="${ms.open}"  step="60"></label>
+    <label class="ms-row">閉場<input type="time" id="ms-close" value="${ms.close}" step="60"></label>
+    <label class="ms-row ms-lunch-toggle">
+      <input type="checkbox" id="ms-lunch"${ms.lunch ? " checked" : ""}> 昼休みあり
+    </label>
+    <div id="ms-lunch-range" style="${ms.lunch ? "" : "display:none"}">
+      <label class="ms-row">昼休み開始<input type="time" id="ms-lunch-start" value="${ms.lunchStart}" step="60"></label>
+      <label class="ms-row">昼休み終了<input type="time" id="ms-lunch-end"   value="${ms.lunchEnd}"   step="60"></label>
+    </div>
+    <div class="ms-btns">
+      <button id="ms-reset-btn">リセット</button>
+      <button id="ms-apply-btn">適用</button>
+    </div>`;
+
+  document.getElementById("ms-lunch").addEventListener("change", e => {
+    document.getElementById("ms-lunch-range").style.display = e.target.checked ? "" : "none";
+  });
+  document.getElementById("ms-reset-btn").addEventListener("click", () => {
+    const { MARKET_SESSION_DEFAULT: d } = { MARKET_SESSION_DEFAULT };
+    state.marketSession = { ...MARKET_SESSION_DEFAULT };
+    saveMarketSession();
+    renderMarketSessionPanel();
+    updateMarketStatus();
+  });
+  document.getElementById("ms-apply-btn").addEventListener("click", () => {
+    state.marketSession = {
+      open:       document.getElementById("ms-open").value || MARKET_SESSION_DEFAULT.open,
+      close:      document.getElementById("ms-close").value || MARKET_SESSION_DEFAULT.close,
+      lunch:      document.getElementById("ms-lunch").checked,
+      lunchStart: document.getElementById("ms-lunch-start").value || MARKET_SESSION_DEFAULT.lunchStart,
+      lunchEnd:   document.getElementById("ms-lunch-end").value || MARKET_SESSION_DEFAULT.lunchEnd,
+    };
+    saveMarketSession();
+    marketSessionPanel.classList.remove("open");
+    updateMarketStatus();
+  });
+}
+
+marketSessionBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  if (marketSessionPanel.classList.contains("open")) { marketSessionPanel.classList.remove("open"); return; }
+  colPanel.classList.remove("open");
+  sigCatPanel.classList.remove("open");
+  renderMarketSessionPanel();
+  const r = marketSessionBtn.getBoundingClientRect();
+  marketSessionPanel.style.top   = (r.bottom + 4) + "px";
+  marketSessionPanel.style.right = (window.innerWidth - r.right) + "px";
+  marketSessionPanel.classList.add("open");
 });
 
 // ===== アラートパネル =====
@@ -498,12 +558,15 @@ async function fetchAll() {
 }
 
 // ===== 市場時間・更新間隔 =====
+function toMins(t) { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
 function isMarketOpen() {
   const jst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
-  const day = jst.getDay();
-  if (day === 0 || day === 6) return false;
+  if ([0, 6].includes(jst.getDay())) return false;
   const mins = jst.getHours() * 60 + jst.getMinutes();
-  return mins >= 540 && mins < 930; // 9:00〜15:30（2024年11月〜昼休みなし）
+  const { open, close, lunch, lunchStart, lunchEnd } = state.marketSession;
+  if (mins < toMins(open) || mins >= toMins(close)) return false;
+  if (lunch && mins >= toMins(lunchStart) && mins < toMins(lunchEnd)) return false;
+  return true;
 }
 function getEffectiveInterval() { return isMarketOpen() ? state.interval : Math.max(state.interval, 300); }
 
@@ -580,6 +643,7 @@ stockList.addEventListener("click", e => {
 document.addEventListener("click", () => {
   colPanel.classList.remove("open");
   sigCatPanel.classList.remove("open");
+  marketSessionPanel.classList.remove("open");
   alertPanel.classList.remove("open");
   notePanel.classList.remove("open");
   portfolioPanel.classList.remove("open");

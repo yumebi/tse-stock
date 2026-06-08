@@ -29,6 +29,9 @@ pub struct StockData {
     pub intraday_closes: Vec<f64>,
     pub week52_high: Option<f64>,
     pub week52_low: Option<f64>,
+    pub credit_ratio: Option<f64>,
+    pub margin_buy: Option<f64>,
+    pub margin_sell: Option<f64>,
 }
 
 // ===== Yahoo Finance API レスポンス型 =====
@@ -111,6 +114,13 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: 
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    // 信用残高をみんかぶから並列取得
+    let credit_task: tokio::task::JoinHandle<(Option<f64>, Option<f64>, Option<f64>)> = {
+        let c = client.clone();
+        let code_owned = code.to_string();
+        tokio::spawn(async move { fetch_credit(&c, &code_owned).await })
+    };
 
     // known_name が None の時のみみんかぶ取得を並列実行
     let ja_task: Option<tokio::task::JoinHandle<Option<String>>> = if known_name.is_none() {
@@ -226,6 +236,9 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: 
     let ichimoku = calc_ichimoku(&highs_full, &lows_full);
     let stoch = calc_stochastics(&closes, &highs_full, &lows_full, 14);
 
+    emit("信用情報取得中...");
+    let (margin_buy, margin_sell, credit_ratio) = credit_task.await.unwrap_or((None, None, None));
+
     let signals = check_signals(
         ma5, ma5_prev, ma25, ma25_prev, ma75, ma75_prev,
         macd_val, macd_sig, macd_prev, macd_sig_prev, rsi_val,
@@ -259,7 +272,34 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: 
         intraday_closes,
         week52_high,
         week52_low,
+        credit_ratio,
+        margin_buy,
+        margin_sell,
     })
+}
+
+// ===== 信用残高取得（みんかぶ） =====
+async fn fetch_credit(client: &reqwest::Client, code: &str) -> (Option<f64>, Option<f64>, Option<f64>) {
+    let url = format!("https://minkabu.jp/stock/{}/credit", code);
+    let html = match client.get(&url).send().await {
+        Ok(resp) => match resp.text().await { Ok(h) => h, Err(_) => return (None, None, None) },
+        Err(_) => return (None, None, None),
+    };
+
+    fn extract_after(html: &str, keyword: &str) -> Option<f64> {
+        let pos = html.find(keyword)?;
+        let tail = &html[pos + keyword.len()..];
+        // 次の数値（小数点・カンマ含む）を抽出
+        let start = tail.find(|c: char| c.is_ascii_digit())?;
+        let end = tail[start..].find(|c: char| !c.is_ascii_digit() && c != '.' && c != ',')?;
+        let num_str = tail[start..start + end].replace(',', "");
+        num_str.parse::<f64>().ok()
+    }
+
+    let buy   = extract_after(&html, "信用買残");
+    let sell  = extract_after(&html, "信用売残");
+    let ratio = extract_after(&html, "信用倍率");
+    (buy, sell, ratio)
 }
 
 fn japanese_name(code: &str) -> Option<String> {
