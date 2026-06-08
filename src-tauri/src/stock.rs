@@ -278,28 +278,54 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: 
     })
 }
 
-// ===== 信用残高取得（みんかぶ） =====
+// ===== 信用残高取得（株探） =====
+// 株探の銘柄ページから「信用取引（単位:千株）」テーブルの最新行を取得
+// 売り残・買い残は千株単位 → 万株に変換して返す
 async fn fetch_credit(client: &reqwest::Client, code: &str) -> (Option<f64>, Option<f64>, Option<f64>) {
-    let url = format!("https://minkabu.jp/stock/{}/credit", code);
+    let url = format!("https://kabutan.jp/stock/?code={}", code);
     let html = match client.get(&url).send().await {
         Ok(resp) => match resp.text().await { Ok(h) => h, Err(_) => return (None, None, None) },
         Err(_) => return (None, None, None),
     };
 
-    fn extract_after(html: &str, keyword: &str) -> Option<f64> {
-        let pos = html.find(keyword)?;
-        let tail = &html[pos + keyword.len()..];
-        // 次の数値（小数点・カンマ含む）を抽出
-        let start = tail.find(|c: char| c.is_ascii_digit())?;
-        let end = tail[start..].find(|c: char| !c.is_ascii_digit() && c != '.' && c != ',')?;
-        let num_str = tail[start..start + end].replace(',', "");
-        num_str.parse::<f64>().ok()
+    // 「信用取引」テーブルの最初の <tbody><tr> 内の td[0]=売り残, td[1]=買い残, td[2]=倍率
+    fn parse_credit(html: &str) -> Option<(f64, f64, f64)> {
+        let base = html.find("信用取引")?;
+        let tail = &html[base..];
+        let tbody = tail.find("<tbody>")?;
+        let row_start = tail[tbody..].find("<tr>")? + tbody;
+        let row_end   = tail[row_start..].find("</tr>").map(|p| p + row_start).unwrap_or(tail.len());
+        let row = &tail[row_start..row_end];
+
+        fn nth_td(s: &str, n: usize) -> Option<f64> {
+            let mut rest = s;
+            for _ in 0..=n {
+                let p = rest.find("<td>")?;
+                rest = &rest[p + 4..];
+            }
+            let end = rest.find("</td>")?;
+            let raw = &rest[..end];
+            // タグ・空白・カンマを除去
+            let clean: String = raw.chars()
+                .filter(|c| c.is_ascii_digit() || *c == '.')
+                .collect();
+            clean.parse::<f64>().ok()
+        }
+
+        let sell  = nth_td(row, 0)?;   // 売り残（千株）
+        let buy   = nth_td(row, 1)?;   // 買い残（千株）
+        let ratio = nth_td(row, 2)?;   // 信用倍率
+        Some((sell, buy, ratio))
     }
 
-    let buy   = extract_after(&html, "信用買残");
-    let sell  = extract_after(&html, "信用売残");
-    let ratio = extract_after(&html, "信用倍率");
-    (buy, sell, ratio)
+    match parse_credit(&html) {
+        Some((sell_k, buy_k, ratio)) => (
+            Some((buy_k  / 10.0 * 10.0).round() / 10.0),  // 千株→万株（小数1桁）
+            Some((sell_k / 10.0 * 10.0).round() / 10.0),
+            Some((ratio  * 100.0).round() / 100.0),
+        ),
+        None => (None, None, None),
+    }
 }
 
 fn japanese_name(code: &str) -> Option<String> {
