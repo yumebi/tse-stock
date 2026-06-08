@@ -206,37 +206,46 @@ function renderMarketSessionPanel() {
   const ms = state.marketSession;
   marketSessionPanel.innerHTML = `
     <div class="ms-header">取引時間設定</div>
-    <label class="ms-row">開場<input type="time" id="ms-open"  value="${ms.open}"  step="60"></label>
-    <label class="ms-row">閉場<input type="time" id="ms-close" value="${ms.close}" step="60"></label>
     <label class="ms-row ms-lunch-toggle">
-      <input type="checkbox" id="ms-lunch"${ms.lunch ? " checked" : ""}> 昼休みあり
+      <input type="checkbox" id="ms-all-day"${ms.allDay ? " checked" : ""}> 24時間取引（時間外なし）
     </label>
-    <div id="ms-lunch-range" style="${ms.lunch ? "" : "display:none"}">
-      <label class="ms-row">昼休み開始<input type="time" id="ms-lunch-start" value="${ms.lunchStart}" step="60"></label>
-      <label class="ms-row">昼休み終了<input type="time" id="ms-lunch-end"   value="${ms.lunchEnd}"   step="60"></label>
+    <div id="ms-time-settings" style="${ms.allDay ? "display:none" : ""}">
+      <label class="ms-row">開場<input type="time" id="ms-open"  value="${ms.open}"  step="60"></label>
+      <label class="ms-row">閉場<input type="time" id="ms-close" value="${ms.close}" step="60"></label>
+      <label class="ms-row ms-lunch-toggle">
+        <input type="checkbox" id="ms-lunch"${ms.lunch ? " checked" : ""}> 昼休みあり
+      </label>
+      <div id="ms-lunch-range" style="${ms.lunch ? "" : "display:none"}">
+        <label class="ms-row">昼休み開始<input type="time" id="ms-lunch-start" value="${ms.lunchStart}" step="60"></label>
+        <label class="ms-row">昼休み終了<input type="time" id="ms-lunch-end"   value="${ms.lunchEnd}"   step="60"></label>
+      </div>
     </div>
     <div class="ms-btns">
       <button id="ms-reset-btn">リセット</button>
       <button id="ms-apply-btn">適用</button>
     </div>`;
 
-  document.getElementById("ms-lunch").addEventListener("change", e => {
+  document.getElementById("ms-all-day").addEventListener("change", e => {
+    document.getElementById("ms-time-settings").style.display = e.target.checked ? "none" : "";
+  });
+  document.getElementById("ms-lunch")?.addEventListener("change", e => {
     document.getElementById("ms-lunch-range").style.display = e.target.checked ? "" : "none";
   });
   document.getElementById("ms-reset-btn").addEventListener("click", () => {
-    const { MARKET_SESSION_DEFAULT: d } = { MARKET_SESSION_DEFAULT };
     state.marketSession = { ...MARKET_SESSION_DEFAULT };
     saveMarketSession();
     renderMarketSessionPanel();
     updateMarketStatus();
   });
   document.getElementById("ms-apply-btn").addEventListener("click", () => {
+    const allDay = document.getElementById("ms-all-day").checked;
     state.marketSession = {
-      open:       document.getElementById("ms-open").value || MARKET_SESSION_DEFAULT.open,
-      close:      document.getElementById("ms-close").value || MARKET_SESSION_DEFAULT.close,
-      lunch:      document.getElementById("ms-lunch").checked,
-      lunchStart: document.getElementById("ms-lunch-start").value || MARKET_SESSION_DEFAULT.lunchStart,
-      lunchEnd:   document.getElementById("ms-lunch-end").value || MARKET_SESSION_DEFAULT.lunchEnd,
+      allDay,
+      open:       document.getElementById("ms-open")?.value        || MARKET_SESSION_DEFAULT.open,
+      close:      document.getElementById("ms-close")?.value       || MARKET_SESSION_DEFAULT.close,
+      lunch:      document.getElementById("ms-lunch")?.checked     ?? false,
+      lunchStart: document.getElementById("ms-lunch-start")?.value || MARKET_SESSION_DEFAULT.lunchStart,
+      lunchEnd:   document.getElementById("ms-lunch-end")?.value   || MARKET_SESSION_DEFAULT.lunchEnd,
     };
     saveMarketSession();
     marketSessionPanel.classList.remove("open");
@@ -562,6 +571,7 @@ function toMins(t) { const [h, m] = t.split(":").map(Number); return h * 60 + m;
 function isMarketOpen() {
   const jst = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
   if ([0, 6].includes(jst.getDay())) return false;
+  if (state.marketSession.allDay) return true; // 24時間取引
   const mins = jst.getHours() * 60 + jst.getMinutes();
   const { open, close, lunch, lunchStart, lunchEnd } = state.marketSession;
   if (mins < toMins(open) || mins >= toMins(close)) return false;
