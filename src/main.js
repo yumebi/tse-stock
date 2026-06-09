@@ -197,6 +197,7 @@ sigCatBtn.addEventListener("click", e => {
   sigCatPanel.style.right = (window.innerWidth - r.right) + "px";
   sigCatPanel.classList.add("open");
 });
+sigCatPanel.addEventListener("click", e => e.stopPropagation());
 
 // ===== 市場時間設定パネル =====
 const marketSessionBtn   = document.getElementById("market-session-btn");
@@ -264,6 +265,7 @@ marketSessionBtn.addEventListener("click", e => {
   marketSessionPanel.style.right = (window.innerWidth - r.right) + "px";
   marketSessionPanel.classList.add("open");
 });
+marketSessionPanel.addEventListener("click", e => e.stopPropagation());
 
 // ===== アラートパネル =====
 const alertPanel = (() => { const el = document.createElement("div"); el.id = "alert-panel"; document.body.appendChild(el); return el; })();
