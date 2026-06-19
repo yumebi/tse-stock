@@ -7,6 +7,11 @@ import { applySticky } from "./sticky.js";
 let _tableHeader = null;
 let _stockList = null;
 
+// 外部API/スクレイピング由来の文字列（企業名等）をHTMLに埋め込む前にエスケープ
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 export function initRender(tableHeader, stockList) {
   _tableHeader = tableHeader;
   _stockList = stockList;
@@ -65,8 +70,10 @@ export function renderCell(s, k, fl, rowOpts = {}) {
     case "code": return `<span class="cell-code">${s.code}</span>`;
     case "name": {
       const nc = getNameCache(); const nJ = nc[s.code] || s.nameJa;
-      const nm = nJ ? `<span class="ja">${nJ}</span><span class="en">${s.name}</span>` : s.name;
-      return `<span class="cell-name" title="${nJ || s.name}">${nm}</span>`;
+      const nJEsc = nJ ? escapeHtml(nJ) : "";
+      const nameEsc = escapeHtml(s.name);
+      const nm = nJ ? `<span class="ja">${nJEsc}</span><span class="en">${nameEsc}</span>` : nameEsc;
+      return `<span class="cell-name" title="${nJEsc || nameEsc}">${nm}</span>`;
     }
     case "price": {
       const dirCls = state.priceDirs[s.code] ? ` dir-${state.priceDirs[s.code]}` : "";
