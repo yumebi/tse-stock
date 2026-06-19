@@ -8,25 +8,23 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 
 ### インストーラー（推奨）
 
-```bash
-git clone https://github.com/yumebi/tse-stock.git
-```
+最新版は [Releases ページ](https://github.com/yumebi/tse-stock/releases/latest) からダウンロードしてください。
 
 #### Windows
 
-| 形式 | パス |
+| 形式 | ファイル名 |
 |---|---|
-| **NSIS インストーラー** | `src-tauri/target/release/bundle/nsis/YMB TSE Stock_x.x.x_x64-setup.exe` |
-| MSI インストーラー | `src-tauri/target/release/bundle/msi/YMB TSE Stock_x.x.x_x64_en-US.msi` |
-| ポータブル版 | `src-tauri/target/release/tse-stock.exe` |
+| **NSIS インストーラー** | `YMB TSE Stock_x.x.x_x64-setup.exe` |
+| MSI インストーラー | `YMB TSE Stock_x.x.x_x64_en-US.msi` |
+| ポータブル版 | `tse-stock.exe` |
 
 > ※ Windows Defender が警告を出す場合があります。「詳細情報」→「実行」で起動してください。
 
 #### macOS
 
-| 形式 | パス |
+| 形式 | ファイル名 |
 |---|---|
-| **DMG** | `src-tauri/target/release/bundle/YMB TSE Stock_x.x.x_universal.dmg` |
+| **DMG** | `YMB TSE Stock_x.x.x_universal.dmg` |
 
 > ※ 初回起動時に「開発元を確認できません」と表示される場合は、右クリック →「開く」で起動してください。
 
@@ -169,7 +167,6 @@ tse-stock/
 │       ├── main.rs             # エントリポイント
 │       ├── lib.rs              # Tauri コマンド登録
 │       └── stock.rs            # 株価取得・指標計算・シグナル判定
-├── bump-version.mjs            # バージョン自動カウントアップスクリプト
 ├── package.json
 ├── vite.config.js
 └── .gitignore
