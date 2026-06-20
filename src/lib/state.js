@@ -1,4 +1,6 @@
 import { MOVABLE_KEYS, NEW_MOVABLE_KEYS, SIG_CATEGORIES, MARKET_SESSION_DEFAULT } from "./constants.js";
+import { THEME_DEFAULT } from "./themes.js";
+import { FONT_DEFAULT } from "./fonts.js";
 
 // ===== 状態 =====
 export const state = {
@@ -8,6 +10,11 @@ export const state = {
   colWidths: JSON.parse(localStorage.getItem("tse-stock-col-widths") || "{}"),
   interval: parseInt(localStorage.getItem("tse-stock-interval") || "30"),
   alerts: JSON.parse(localStorage.getItem("tse-stock-alerts") || "{}"),
+  rowColors: JSON.parse(localStorage.getItem("tse-stock-row-colors") || "{}"),
+  theme: localStorage.getItem("tse-stock-theme") || THEME_DEFAULT,
+  font: localStorage.getItem("tse-stock-font") || FONT_DEFAULT,
+  fontBold: localStorage.getItem("tse-stock-font-bold") === "true",
+  rowMode: localStorage.getItem("tse-stock-row-mode") || "1row",
   notes: JSON.parse(localStorage.getItem("tse-stock-notes") || "{}"),
   portfolio: JSON.parse(localStorage.getItem("tse-stock-portfolio") || "{}"),
   priceDirs: {},
@@ -31,7 +38,7 @@ NEW_MOVABLE_KEYS.forEach(k => { if (!state.colOrder.includes(k)) state.colOrder.
 
 export const priceFlash = {};
 
-export function saveAll() { localStorage.setItem("tse-stock-tabs", JSON.stringify(state.tabs.map(t => ({ name: t.name, codes: t.stocks.map(s => s.code) })))); localStorage.setItem("tse-stock-active", state.activeTabIdx); }
+export function saveAll() { localStorage.setItem("tse-stock-tabs", JSON.stringify(state.tabs.map(t => ({ name: t.name, codes: t.stocks.map(s => s.code), sortKey: t.sortKey ?? null, sortAsc: t.sortAsc ?? true })))); localStorage.setItem("tse-stock-active", state.activeTabIdx); }
 export function loadAll() { try { const r = localStorage.getItem("tse-stock-tabs"); if (r) { const td = JSON.parse(r); if (Array.isArray(td) && td.length > 0) return td; } } catch (_) {} return [{ name: "デイトレ", codes: ["7203", "8306", "9984"] }, { name: "長期", codes: [] }]; }
 export function saveColState() {
   localStorage.setItem("tse-stock-hide", JSON.stringify([...state.hiddenToggles]));
@@ -39,6 +46,11 @@ export function saveColState() {
 }
 export function saveColWidths()  { localStorage.setItem("tse-stock-col-widths", JSON.stringify(state.colWidths)); }
 export function saveAlerts()     { localStorage.setItem("tse-stock-alerts", JSON.stringify(state.alerts)); }
+export function saveRowColors()  { localStorage.setItem("tse-stock-row-colors", JSON.stringify(state.rowColors)); }
+export function saveTheme()      { localStorage.setItem("tse-stock-theme", state.theme); }
+export function saveFont()       { localStorage.setItem("tse-stock-font", state.font); }
+export function saveFontBold()   { localStorage.setItem("tse-stock-font-bold", String(state.fontBold)); }
+export function saveRowMode()    { localStorage.setItem("tse-stock-row-mode", state.rowMode); }
 export function saveNotes()      { localStorage.setItem("tse-stock-notes", JSON.stringify(state.notes)); }
 export function savePortfolio()  { localStorage.setItem("tse-stock-portfolio", JSON.stringify(state.portfolio)); }
 export function saveSigCats()       { localStorage.setItem("tse-stock-sig-cats", JSON.stringify(state.sigCats)); }

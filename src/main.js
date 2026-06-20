@@ -1,12 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, availableMonitors } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 
 import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS, SIG_CATEGORIES, MARKET_SESSION_DEFAULT } from "./lib/constants.js";
 import {
   state, priceFlash,
-  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveNotes, savePortfolio, saveSigCats, saveMarketSession,
+  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveNotes, savePortfolio, saveSigCats, saveMarketSession, saveRowColors, saveTheme, saveFont, saveFontBold, saveRowMode,
   getNameCache, saveNameCache,
   stocks, setStocks,
   hash, detectSignalChange,
@@ -16,7 +16,11 @@ import { scoreSignals, scoreText } from "./lib/indicators.js";
 import { visibleCols, getGroupOrder, moveGroup } from "./lib/columns.js";
 import { initSticky, applySticky, scheduleNameAutoSize } from "./lib/sticky.js";
 import { initTabs, renderTabs, addTab, deleteTab } from "./lib/tabs.js";
-import { initRender, initRenderHelpers, render, renderCell, updateSigScroll } from "./lib/render.js";
+import { initRender, initRenderHelpers, render, renderCell, updateSigScroll, escapeHtml } from "./lib/render.js";
+import { THEMES, applyTheme } from "./lib/themes.js";
+import { FONTS, applyFont, applyFontBold } from "./lib/fonts.js";
+import { COMPANY_NAMES_JA } from "./lib/companyNames.js";
+import { createChart, LineSeries } from "lightweight-charts";
 
 // ===== DOM =====
 const stockList      = document.getElementById("stock-list");
@@ -34,18 +38,50 @@ const colPanelBtn    = document.getElementById("col-panel-btn");
 const sigCatBtn      = document.getElementById("sig-cat-btn");
 const addTabBtn      = document.getElementById("add-tab-btn");
 const idxN225        = document.getElementById("idx-n225");
+const idxN225F       = document.getElementById("idx-n225f");
+const idxUsdJpy      = document.getElementById("idx-usdjpy");
 const marketStatus   = document.getElementById("market-status");
 const densityBtn     = document.getElementById("density-btn");
+const rowModeBtn     = document.getElementById("row-mode-btn");
 const pinBtn         = document.getElementById("pin-btn");
 const sparkSel       = document.getElementById("spark-sel");
 
 // ===== ヘルパー =====
 function setStatus(m, e) { statusMsg.textContent = m; statusMsg.style.color = e ? "#f85149" : "#8b949e"; }
 
+// ===== バージョンチェック =====
+async function checkForUpdate() {
+  try {
+    const res = await fetch("https://raw.githubusercontent.com/yumebi/tse-stock/master/version.json");
+    if (!res.ok) return;
+    const { version: latest } = await res.json();
+    const current = await getVersion();
+    if (latest && latest !== current) {
+      setStatus(`新バージョン v${latest} が利用可能です（現在: v${current}） — GitHub Releasesから入手できます`, false);
+    }
+  } catch (_) {}
+}
+
 // ===== ウィンドウ =====
 const win = getCurrentWindow();
 const WIN_KEY = "tse-stock-window";
-async function restoreWindow() { try { const r = localStorage.getItem(WIN_KEY); if (!r) return; const { x, y, w, h } = JSON.parse(r); if (x != null) await win.setPosition({ x, y }); if (w > 400) await win.setSize({ width: w, height: h }); } catch (_) {} }
+async function restoreWindow() {
+  try {
+    const r = localStorage.getItem(WIN_KEY);
+    if (!r) return;
+    let { x, y, w, h } = JSON.parse(r);
+    if (x != null && y != null) {
+      const monitors = await availableMonitors().catch(() => []);
+      const fits = monitors.some(m =>
+        x >= m.position.x && x < m.position.x + m.size.width &&
+        y >= m.position.y && y < m.position.y + m.size.height
+      );
+      if (!fits && monitors.length > 0) { x = monitors[0].position.x + 40; y = monitors[0].position.y + 40; }
+      await win.setPosition({ x, y });
+    }
+    if (w && h) await win.setSize({ width: w, height: h });
+  } catch (_) {}
+}
 function saveWindowPos() { Promise.all([win.outerPosition(), win.outerSize()]).then(([p, s]) => { localStorage.setItem(WIN_KEY, JSON.stringify({ x: p.x, y: p.y, w: s.width, h: s.height })); }).catch(() => {}); }
 
 getVersion().then(v => {
@@ -254,6 +290,49 @@ function renderMarketSessionPanel() {
   });
 }
 
+// ===== テーマ・フォント設定パネル =====
+const themeBtn = document.getElementById("theme-btn");
+const themePanel = (() => { const el = document.createElement("div"); el.id = "theme-panel"; document.body.appendChild(el); return el; })();
+
+function renderThemePanel() {
+  themePanel.innerHTML = `
+    <div class="theme-panel-header">テーマ・フォント設定</div>
+    <label class="theme-row">テーマ
+      <select id="theme-sel">
+        ${Object.entries(THEMES).map(([k, t]) => `<option value="${k}"${state.theme === k ? " selected" : ""}>${t.label}</option>`).join("")}
+      </select>
+    </label>
+    <label class="theme-row">フォント（数字・コード）
+      <select id="font-sel">
+        ${Object.entries(FONTS).map(([k, f]) => `<option value="${k}"${state.font === k ? " selected" : ""}>${f.label}</option>`).join("")}
+      </select>
+    </label>
+    <label class="theme-row" style="flex-direction:row; align-items:center; gap:6px;">
+      <input type="checkbox" id="font-bold-toggle"${state.fontBold ? " checked" : ""}> 太字表示
+    </label>`;
+  document.getElementById("theme-sel").addEventListener("change", e => {
+    state.theme = e.target.value; saveTheme(); applyTheme(state.theme);
+  });
+  document.getElementById("font-sel").addEventListener("change", e => {
+    state.font = e.target.value; saveFont(); applyFont(state.font);
+  });
+  document.getElementById("font-bold-toggle").addEventListener("change", e => {
+    state.fontBold = e.target.checked; saveFontBold(); applyFontBold(state.fontBold);
+  });
+}
+
+themeBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  if (themePanel.classList.contains("open")) { themePanel.classList.remove("open"); return; }
+  colPanel.classList.remove("open"); sigCatPanel.classList.remove("open"); marketSessionPanel.classList.remove("open");
+  renderThemePanel();
+  const r = themeBtn.getBoundingClientRect();
+  themePanel.style.top   = (r.bottom + 4) + "px";
+  themePanel.style.right = (window.innerWidth - r.right) + "px";
+  themePanel.classList.add("open");
+});
+themePanel.addEventListener("click", e => e.stopPropagation());
+
 marketSessionBtn.addEventListener("click", e => {
   e.stopPropagation();
   if (marketSessionPanel.classList.contains("open")) { marketSessionPanel.classList.remove("open"); return; }
@@ -329,6 +408,39 @@ function openNotePanel(code, anchorEl) {
   });
 }
 notePanel.addEventListener("click", e => e.stopPropagation());
+
+// ===== 行カラーマークパネル =====
+const ROW_COLORS = ["#f85149", "#f0883e", "#d29922", "#3fb950", "#58a6ff", "#bc8cff", "#8b949e"];
+const colorPanel = (() => { const el = document.createElement("div"); el.id = "color-panel"; document.body.appendChild(el); return el; })();
+let _colorCode = null;
+
+function openColorPanel(code, anchorEl) {
+  _colorCode = code;
+  const cur = state.rowColors[code];
+  colorPanel.innerHTML = `
+    <div class="color-panel-title">🎨 行カラー <span class="color-code">${code}</span></div>
+    <div class="color-swatches">
+      ${ROW_COLORS.map(c => `<button class="color-swatch${cur === c ? " active" : ""}" data-color="${c}" style="background:${c}"></button>`).join("")}
+    </div>
+    <div class="color-panel-btns">
+      <button id="color-clear-btn">クリア</button>
+    </div>`;
+  const r = anchorEl.getBoundingClientRect();
+  colorPanel.style.top = (r.bottom + 4) + "px";
+  colorPanel.style.left = Math.min(r.left, window.innerWidth - 220) + "px";
+  colorPanel.classList.add("open");
+  colorPanel.querySelectorAll(".color-swatch").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.rowColors[_colorCode] = btn.dataset.color;
+      saveRowColors(); colorPanel.classList.remove("open"); render();
+    });
+  });
+  colorPanel.querySelector("#color-clear-btn").addEventListener("click", () => {
+    delete state.rowColors[_colorCode];
+    saveRowColors(); colorPanel.classList.remove("open"); render();
+  });
+}
+colorPanel.addEventListener("click", e => e.stopPropagation());
 
 // ===== ポートフォリオパネル =====
 const portfolioPanel = (() => { const el = document.createElement("div"); el.id = "portfolio-panel"; document.body.appendChild(el); return el; })();
@@ -430,6 +542,14 @@ async function fetchIndices() {
     const n225 = await invoke("fetch_index_cmd", { symbol: "^N225" });
     idxN225.innerHTML = `日経 ${n225.price.toLocaleString()} <span class="${n225.change >= 0 ? "up" : "down"}">${n225.change >= 0 ? "+" : ""}${n225.changePercent.toFixed(2)}%</span>`;
   } catch (_) { idxN225.innerHTML = "日経 ---"; }
+  try {
+    const n225f = await invoke("fetch_index_cmd", { symbol: "NIY=F" });
+    idxN225F.innerHTML = `日経先物 ${n225f.price.toLocaleString()} <span class="${n225f.change >= 0 ? "up" : "down"}">${n225f.change >= 0 ? "+" : ""}${n225f.changePercent.toFixed(2)}%</span>`;
+  } catch (_) { idxN225F.innerHTML = "日経先物 ---"; }
+  try {
+    const usdjpy = await invoke("fetch_index_cmd", { symbol: "JPY=X" });
+    idxUsdJpy.innerHTML = `USD/JPY ${usdjpy.price.toFixed(2)} <span class="${usdjpy.change >= 0 ? "up" : "down"}">${usdjpy.change >= 0 ? "+" : ""}${usdjpy.changePercent.toFixed(2)}%</span>`;
+  } catch (_) { idxUsdJpy.innerHTML = "USD/JPY ---"; }
 }
 
 // ===== CSV =====
@@ -455,6 +575,8 @@ tableHeader.addEventListener("click", e => {
   const cls = [...sp.classList].find(c => SORT_KEYS[c]); if (!cls || !SORT_KEYS[cls].key) return;
   const sk = SORT_KEYS[cls];
   if (state.sortKey === sk.key) state.sortAsc = !state.sortAsc; else { state.sortKey = sk.key; state.sortAsc = true; }
+  const t = state.tabs[state.activeTabIdx]; if (t) { t.sortKey = state.sortKey; t.sortAsc = state.sortAsc; }
+  saveAll();
   render();
 });
 
@@ -499,6 +621,19 @@ if (densityBtn) {
     state.density = DENSITY_NEXT[state.density] || "normal";
     localStorage.setItem("tse-stock-density", state.density);
     applyDensity();
+  });
+}
+
+// ===== 1行/3行表示切替 =====
+function applyRowMode() {
+  if (rowModeBtn) rowModeBtn.textContent = state.rowMode === "3row" ? "3行" : "1行";
+}
+if (rowModeBtn) {
+  rowModeBtn.addEventListener("click", () => {
+    state.rowMode = state.rowMode === "3row" ? "1row" : "3row";
+    saveRowMode();
+    applyRowMode();
+    render();
   });
 }
 
@@ -618,10 +753,108 @@ refreshBtn.addEventListener("click", async () => {
   await fetchAll();
 });
 
-addBtn.addEventListener("click", async () => { const c = stockCodeInput.value.trim(); if (!c) return; stockCodeInput.value = ""; await addStock(c); });
+addBtn.addEventListener("click", async () => { const c = stockCodeInput.value.trim(); if (!c) return; stockCodeInput.value = ""; searchPanel.classList.remove("open"); await addStock(c); });
 stockCodeInput.addEventListener("keydown", e => { if (e.key === "Enter") addBtn.click(); });
+
+// ===== チャートポップアップ =====
+const chartModalOverlay = (() => {
+  const el = document.createElement("div");
+  el.id = "chart-modal-overlay";
+  el.innerHTML = `<div id="chart-modal"><div id="chart-modal-header"><span id="chart-modal-title"></span><button id="chart-modal-close">✕</button></div><div id="chart-modal-body"></div><div id="chart-modal-news"></div></div>`;
+  document.body.appendChild(el);
+  return el;
+})();
+const chartModalTitle = chartModalOverlay.querySelector("#chart-modal-title");
+const chartModalBody  = chartModalOverlay.querySelector("#chart-modal-body");
+const chartModalNews  = chartModalOverlay.querySelector("#chart-modal-news");
+let _currentChart = null;
+
+function generateTradingDates(count, endDate = new Date()) {
+  const dates = [];
+  const d = new Date(endDate);
+  while (dates.length < count) {
+    if (d.getDay() !== 0 && d.getDay() !== 6) dates.unshift(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() - 1);
+  }
+  return dates;
+}
+
+function openChartModal(code) {
+  const s = stocks().find(x => x.code === code);
+  if (!s) return;
+  chartModalTitle.textContent = `${s.nameJa || s.name} (${s.code})`;
+  chartModalBody.innerHTML = "";
+  chartModalNews.innerHTML = `<div class="news-loading">ニュース取得中...</div>`;
+  chartModalOverlay.classList.add("open");
+  if (_currentChart) { _currentChart.remove(); _currentChart = null; }
+
+  if (s.recentCloses?.length) {
+    const chart = createChart(chartModalBody, {
+      width: chartModalBody.clientWidth,
+      height: 300,
+      layout: { background: { color: "transparent" }, textColor: "#8b949e" },
+      grid: { vertLines: { color: "#21262d" }, horzLines: { color: "#21262d" } },
+      timeScale: { borderColor: "#30363d" },
+      rightPriceScale: { borderColor: "#30363d" },
+    });
+    const series = chart.addSeries(LineSeries, { color: "#58a6ff", lineWidth: 2 });
+    const dates = generateTradingDates(s.recentCloses.length);
+    series.setData(s.recentCloses.map((v, i) => ({ time: dates[i], value: v })));
+    chart.timeScale().fitContent();
+    _currentChart = chart;
+  } else {
+    chartModalBody.innerHTML = `<div class="chart-empty">チャートデータがありません</div>`;
+  }
+
+  invoke("fetch_news_cmd", { code: s.code }).then(news => {
+    chartModalNews.innerHTML = news.length
+      ? news.map(n => `<div class="news-item"><span class="news-time">${escapeHtml(n.time)}</span><span class="news-title">${escapeHtml(n.title)}</span><span class="news-media">${escapeHtml(n.media)}</span></div>`).join("")
+      : `<div class="news-empty">関連ニュースが見つかりません</div>`;
+  }).catch(() => {
+    chartModalNews.innerHTML = `<div class="news-empty">ニュース取得に失敗しました</div>`;
+  });
+}
+
+function closeChartModal() {
+  chartModalOverlay.classList.remove("open");
+  if (_currentChart) { _currentChart.remove(); _currentChart = null; }
+}
+chartModalOverlay.querySelector("#chart-modal-close").addEventListener("click", closeChartModal);
+chartModalOverlay.addEventListener("click", e => { if (e.target === chartModalOverlay) closeChartModal(); });
+
+// ===== 銘柄検索（企業名→コード候補） =====
+const searchPanel = (() => { const el = document.createElement("div"); el.id = "search-panel"; document.body.appendChild(el); return el; })();
+
+function renderSearchCandidates(query) {
+  if (!query || /^\d+$/.test(query)) { searchPanel.classList.remove("open"); return; }
+  const matches = Object.entries(COMPANY_NAMES_JA).filter(([, name]) => name.includes(query)).slice(0, 8);
+  if (matches.length === 0) { searchPanel.classList.remove("open"); return; }
+  searchPanel.innerHTML = matches.map(([code, name]) => `<button class="search-item" data-code="${code}">${name}<span class="search-code">${code}</span></button>`).join("");
+  searchPanel.querySelectorAll(".search-item").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const code = btn.dataset.code;
+      stockCodeInput.value = "";
+      searchPanel.classList.remove("open");
+      await addStock(code);
+    });
+  });
+  const r = stockCodeInput.getBoundingClientRect();
+  searchPanel.style.top = (r.bottom + 4) + "px";
+  searchPanel.style.left = r.left + "px";
+  searchPanel.classList.add("open");
+}
+
+stockCodeInput.addEventListener("input", () => renderSearchCandidates(stockCodeInput.value.trim()));
+searchPanel.addEventListener("click", e => e.stopPropagation());
 addTabBtn.addEventListener("click", addTab);
 exportBtn.addEventListener("click", exportCSV);
+
+// ===== キーボードショートカット =====
+document.addEventListener("keydown", e => {
+  if (!e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === "r") { e.preventDefault(); refreshBtn.click(); }
+  else if (e.key === "t") { e.preventDefault(); addTabBtn.click(); }
+});
 
 // ===== イベント =====
 stockList.addEventListener("click", e => {
@@ -649,7 +882,21 @@ stockList.addEventListener("click", e => {
     e.stopPropagation();
     portfolioPanel.classList.remove("open"); alertPanel.classList.remove("open"); notePanel.classList.remove("open");
     openPortfolioPanel(pnlEl.dataset.code, pnlEl);
+  } else {
+    const row = e.target.closest(".stock-row");
+    if (row) openChartModal(row.dataset.code);
   }
+});
+
+stockList.addEventListener("contextmenu", e => {
+  const codeEl = e.target.closest(".cell-code");
+  if (!codeEl) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const code = codeEl.closest(".stock-row")?.dataset.code;
+  if (!code) return;
+  alertPanel.classList.remove("open"); notePanel.classList.remove("open"); portfolioPanel.classList.remove("open");
+  openColorPanel(code, codeEl);
 });
 
 document.addEventListener("click", () => {
@@ -659,6 +906,9 @@ document.addEventListener("click", () => {
   alertPanel.classList.remove("open");
   notePanel.classList.remove("open");
   portfolioPanel.classList.remove("open");
+  colorPanel.classList.remove("open");
+  themePanel.classList.remove("open");
+  searchPanel.classList.remove("open");
 });
 
 stockList.addEventListener("mouseover", e => {
@@ -681,14 +931,21 @@ async function init() {
   initTabs(tabsEl, render, saveAll);
 
   restoreWindow();
+  checkForUpdate();
+  applyTheme(state.theme);
+  applyFont(state.font);
+  applyFontBold(state.fontBold);
   applyDensity();
+  applyRowMode();
   if (pinBtn) pinBtn.classList.toggle("active", state.pinCols);
   document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === state.signalFilter));
   if (sparkSel) sparkSel.value = state.sparkPeriod;
 
   const td = loadAll();
-  state.tabs = td.map(t => ({ name: t.name, stocks: [] }));
+  state.tabs = td.map(t => ({ name: t.name, stocks: [], sortKey: t.sortKey ?? null, sortAsc: t.sortAsc ?? true }));
   state.activeTabIdx = Math.min(parseInt(localStorage.getItem("tse-stock-active") || 0), state.tabs.length - 1);
+  state.sortKey = state.tabs[state.activeTabIdx]?.sortKey ?? null;
+  state.sortAsc = state.tabs[state.activeTabIdx]?.sortAsc ?? true;
   renderTabs();
   const codes = td[state.activeTabIdx]?.codes || DEFAULT_STOCKS;
   for (const code of codes) {

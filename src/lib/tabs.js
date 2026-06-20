@@ -46,6 +46,14 @@ export function renderTabs() {
   });
 }
 
-export function switchTab(idx) { state.activeTabIdx = idx; state.sortKey = null; state.sortAsc = true; _saveAll(); renderTabs(); _render(); }
-export function addTab() { const name = `リスト${state.tabs.length + 1}`; state.tabs.push({ name, stocks: [] }); state.activeTabIdx = state.tabs.length - 1; _saveAll(); renderTabs(); _render(); }
+export function switchTab(idx) {
+  const cur = state.tabs[state.activeTabIdx];
+  if (cur) { cur.sortKey = state.sortKey; cur.sortAsc = state.sortAsc; }
+  state.activeTabIdx = idx;
+  const next = state.tabs[idx];
+  state.sortKey = next?.sortKey ?? null;
+  state.sortAsc = next?.sortAsc ?? true;
+  _saveAll(); renderTabs(); _render();
+}
+export function addTab() { const name = `リスト${state.tabs.length + 1}`; state.tabs.push({ name, stocks: [], sortKey: null, sortAsc: true }); state.activeTabIdx = state.tabs.length - 1; _saveAll(); renderTabs(); _render(); }
 export function deleteTab(idx) { if (state.tabs.length <= 1) return; state.tabs.splice(idx, 1); if (state.activeTabIdx >= state.tabs.length) state.activeTabIdx = state.tabs.length - 1; _saveAll(); renderTabs(); _render(); }

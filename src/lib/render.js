@@ -1,6 +1,6 @@
 import { state, priceFlash, stocks, getNameCache } from "./state.js";
 import { SORT_KEYS, SPARK_LABELS, SIG_PAUSE_MS } from "./constants.js";
-import { visibleCols } from "./columns.js";
+import { visibleCols, visibleCols3 } from "./columns.js";
 import { scoreSignals, scoreClass, scoreText, filterSigs, sparkline, getSparkData, volClass, gradClass, fmt, fmtPct, fmtOpt } from "./indicators.js";
 import { applySticky } from "./sticky.js";
 
@@ -8,7 +8,7 @@ let _tableHeader = null;
 let _stockList = null;
 
 // 外部API/スクレイピング由来の文字列（企業名等）をHTMLに埋め込む前にエスケープ
-function escapeHtml(str) {
+export function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
@@ -67,7 +67,7 @@ export function renderCell(s, k, fl, rowOpts = {}) {
   const up = s.change >= 0, rsiC = s.rsi != null ? (s.rsi > 70 ? "over" : s.rsi < 30 ? "under" : "") : "";
   switch (k) {
     case "reorder": return `<span class="cell-reorder"><button class="reorder-btn up" data-code="${s.code}"${rowOpts.isFirst ? " disabled" : ""}>▲</button><button class="reorder-btn down" data-code="${s.code}"${rowOpts.isLast ? " disabled" : ""}>▼</button></span>`;
-    case "code": return `<span class="cell-code">${s.code}</span>`;
+    case "code": return `<span class="cell-code" title="右クリックで行カラー設定">${s.code}</span>`;
     case "name": {
       const nc = getNameCache(); const nJ = nc[s.code] || s.nameJa;
       const nJEsc = nJ ? escapeHtml(nJ) : "";
@@ -108,6 +108,16 @@ export function renderCell(s, k, fl, rowOpts = {}) {
     case "marginSell": {
       if (s.marginSell == null) return `<span class="cell-credit">-</span>`;
       return `<span class="cell-credit" title="信用売り残: ${s.marginSell}万株">${s.marginSell.toFixed(1)}万</span>`;
+    }
+    case "per": return s.per == null ? `<span class="cell-credit">-</span>` : `<span class="cell-credit" title="PER: ${s.per}倍">${s.per.toFixed(1)}倍</span>`;
+    case "pbr": return s.pbr == null ? `<span class="cell-credit">-</span>` : `<span class="cell-credit" title="PBR: ${s.pbr}倍">${s.pbr.toFixed(2)}倍</span>`;
+    case "dividendYield": return s.dividendYield == null ? `<span class="cell-credit">-</span>` : `<span class="cell-credit" title="配当利回り: ${s.dividendYield}%">${s.dividendYield.toFixed(2)}%</span>`;
+    case "earningsDate": {
+      if (!s.earningsDate) return `<span class="cell-credit">-</span>`;
+      const days = Math.ceil((new Date(s.earningsDate) - new Date()) / 86400000);
+      const cls = days <= 0 ? "earnings-today" : days <= 3 ? "earnings-near" : days <= 7 ? "earnings-soon" : "";
+      const countText = days >= 0 && days <= 30 ? ` (${days}日)` : "";
+      return `<span class="cell-earnings ${cls}" title="決算発表予定: ${s.earningsDate}">${s.earningsDate}${countText}</span>`;
     }
     case "w52hi": {
       if (!s.week52High || !s.price) return `<span class="cell-w52">-</span>`;
@@ -150,9 +160,15 @@ export function renderCell(s, k, fl, rowOpts = {}) {
   return "";
 }
 
+// ===== 3行表示モード: グループ列セル =====
+function renderGroupCell(s, rows, fl, rowOpts) {
+  const parts = rows.map(k => renderCell(s, k, fl, rowOpts)).filter(Boolean);
+  return `<div class="g3-cell">${parts.join("")}</div>`;
+}
+
 // ===== 差分レンダリング =====
 function computeLayoutKey(gridTpl) {
-  return [gridTpl, state.density, state.sparkPeriod, state.pinCols, JSON.stringify(state.sigCats)].join("|");
+  return [gridTpl, state.density, state.sparkPeriod, state.pinCols, state.rowMode, JSON.stringify(state.sigCats)].join("|");
 }
 
 function computeRowHash(s, fl, isFirst, isLast) {
@@ -165,7 +181,7 @@ function computeRowHash(s, fl, isFirst, isLast) {
     s.ma5, s.ma25, s.ma75, s.macd, s.macdSignal, s.rsi,
     s.week52High, s.week52Low, s.signals?.join("|"),
     state.priceDirs[s.code], fl,
-    pf?.cost, pf?.qty, al?.hi, al?.lo, state.notes[s.code],
+    pf?.cost, pf?.qty, al?.hi, al?.lo, state.notes[s.code], state.rowColors[s.code],
     isFirst, isLast,
   ].join("|");
 }
@@ -179,14 +195,17 @@ export function render() {
     return;
   }
 
-  const cols = visibleCols();
+  const is3Row = state.rowMode === "3row";
+  const cols = is3Row ? visibleCols3() : visibleCols();
   const gridTpl = cols.map(c => c.w).join(" ");
   _tableHeader.style.gridTemplateColumns = gridTpl;
+  _tableHeader.classList.toggle("row-mode-3", is3Row);
+  _stockList.classList.toggle("row-mode-3", is3Row);
 
   // ヘッダー常時再構築（軽量）
   _tableHeader.innerHTML = cols.map(c => {
     const colCls = `col-${c.k}`;
-    const sortable = SORT_KEYS[colCls] ? " sortable" : "";
+    const sortable = !c.rows && SORT_KEYS[colCls] ? " sortable" : "";
     const lbl = c.k === "spark" ? (SPARK_LABELS[state.sparkPeriod] || "5日") : c.label;
     return `<span class="${colCls}${sortable}" data-col="${c.k}">${lbl}</span>`;
   }).join("");
@@ -255,7 +274,8 @@ export function render() {
         row.dataset.code = s.code;
       }
       row.style.gridTemplateColumns = gridTpl;
-      row.innerHTML = cols.map(c => renderCell(s, c.k, fl, rowOpts)).join("");
+      row.style.borderLeft = state.rowColors[s.code] ? `3px solid ${state.rowColors[s.code]}` : "";
+      row.innerHTML = cols.map(c => c.rows ? renderGroupCell(s, c.rows, fl, rowOpts) : renderCell(s, c.k, fl, rowOpts)).join("");
       _rowHashes.set(s.code, h);
       updatedCodes.add(s.code);
     }

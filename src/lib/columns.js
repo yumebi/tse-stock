@@ -1,5 +1,5 @@
 import { state } from "./state.js";
-import { ALL_COLS } from "./constants.js";
+import { ALL_COLS, COL_GROUPS_3ROW } from "./constants.js";
 
 // ===== 列の表示制御 =====
 export function visibleCols() {
@@ -17,6 +17,15 @@ export function visibleCols() {
     return (orderMap.get(a.k) ?? 999) - (orderMap.get(b.k) ?? 999);
   });
   return result.map(c => state.colWidths[c.k] ? { ...c, w: state.colWidths[c.k] + "px" } : c);
+}
+
+// ===== 3行表示モード用（固定レイアウト、カスタマイズ非対応） =====
+export function visibleCols3() {
+  return [
+    { k: "reorder", w: "36px", label: "" },
+    ...COL_GROUPS_3ROW,
+    { k: "del", w: "28px", label: "" },
+  ];
 }
 
 export function getGroupOrder() {
