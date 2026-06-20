@@ -82,7 +82,12 @@ async function restoreWindow() {
     if (w && h) await win.setSize({ width: w, height: h });
   } catch (_) {}
 }
-function saveWindowPos() { Promise.all([win.outerPosition(), win.outerSize()]).then(([p, s]) => { localStorage.setItem(WIN_KEY, JSON.stringify({ x: p.x, y: p.y, w: s.width, h: s.height })); }).catch(() => {}); }
+async function saveWindowPos() {
+  try {
+    const [p, s] = await Promise.all([win.outerPosition(), win.outerSize()]);
+    localStorage.setItem(WIN_KEY, JSON.stringify({ x: p.x, y: p.y, w: s.width, h: s.height }));
+  } catch (_) {}
+}
 
 getVersion().then(v => {
   const title = `YMB TSE Stock v${v} - 東証株価`;
@@ -967,6 +972,10 @@ async function init() {
 let saveT;
 win.onResized(() => { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); });
 win.onMoved(() => { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); });
+win.onCloseRequested(() => {
+  clearTimeout(saveT);
+  saveWindowPos();
+});
 
 // ===== 進捗イベント =====
 listen("stock-progress", e => { const { code, step } = e.payload; setStatus(`${code}: ${step}`, false); });
