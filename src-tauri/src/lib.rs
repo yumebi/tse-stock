@@ -1,6 +1,6 @@
 mod stock;
 
-use stock::{fetch_index, fetch_stock};
+use stock::{fetch_index, fetch_news_for_code, fetch_stock};
 
 #[tauri::command]
 async fn fetch_stock_cmd(
@@ -17,10 +17,15 @@ async fn fetch_index_cmd(app_handle: tauri::AppHandle, symbol: String) -> Result
     fetch_index(&app_handle, &symbol).await
 }
 
+#[tauri::command]
+async fn fetch_news_cmd(code: String) -> Result<Vec<stock::NewsItem>, String> {
+    fetch_news_for_code(&code).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![fetch_stock_cmd, fetch_index_cmd])
+        .invoke_handler(tauri::generate_handler![fetch_stock_cmd, fetch_index_cmd, fetch_news_cmd])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -32,6 +32,18 @@ pub struct StockData {
     pub credit_ratio: Option<f64>,
     pub margin_buy: Option<f64>,
     pub margin_sell: Option<f64>,
+    pub per: Option<f64>,
+    pub pbr: Option<f64>,
+    pub dividend_yield: Option<f64>,
+    pub earnings_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewsItem {
+    pub title: String,
+    pub time: String,
+    pub media: String,
 }
 
 // ===== Yahoo Finance API レスポンス型 =====
@@ -116,10 +128,17 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: 
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
     // 信用残高をみんかぶから並列取得
-    let credit_task: tokio::task::JoinHandle<(Option<f64>, Option<f64>, Option<f64>)> = {
+    let credit_task: tokio::task::JoinHandle<(Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>)> = {
         let c = client.clone();
         let code_owned = code.to_string();
         tokio::spawn(async move { fetch_credit(&c, &code_owned).await })
+    };
+
+    // 決算発表予定日をYahoo!ファイナンスから並列取得
+    let earnings_task: tokio::task::JoinHandle<Option<String>> = {
+        let c = client.clone();
+        let code_owned = code.to_string();
+        tokio::spawn(async move { fetch_earnings_date(&c, &code_owned).await })
     };
 
     // known_name が None の時のみみんかぶ取得を並列実行
@@ -237,7 +256,9 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: 
     let stoch = calc_stochastics(&closes, &highs_full, &lows_full, 14);
 
     emit("信用情報取得中...");
-    let (margin_buy, margin_sell, credit_ratio) = credit_task.await.unwrap_or((None, None, None));
+    let (margin_buy, margin_sell, credit_ratio, per, pbr, dividend_yield) =
+        credit_task.await.unwrap_or((None, None, None, None, None, None));
+    let earnings_date = earnings_task.await.unwrap_or(None);
 
     let signals = check_signals(
         ma5, ma5_prev, ma25, ma25_prev, ma75, ma75_prev,
@@ -275,18 +296,108 @@ pub async fn fetch_stock(app_handle: &tauri::AppHandle, code: &str, known_name: 
         credit_ratio,
         margin_buy,
         margin_sell,
+        per,
+        pbr,
+        dividend_yield,
+        earnings_date,
     })
 }
 
-// ===== 信用残高取得（株探） =====
-// 株探の銘柄ページから「信用取引（単位:千株）」テーブルの最新行を取得
+// ===== 決算発表予定日取得（Yahoo!ファイナンス） =====
+// pressReleaseSchedule.pressReleaseDate はNext.jsのRSCペイロードとして
+// 二重エスケープされたJSON文字列（\"...\"）でHTML内に埋め込まれている
+async fn fetch_earnings_date(client: &reqwest::Client, code: &str) -> Option<String> {
+    let url = format!("https://finance.yahoo.co.jp/quote/{}.T", code);
+    let html = client.get(&url).send().await.ok()?.text().await.ok()?;
+    let key = r#"pressReleaseDate\":\""#;
+    let idx = html.find(key)?;
+    let start = idx + key.len();
+    let end = html[start..].find(r#"\""#)? + start;
+    let date = &html[start..end];
+    if date.is_empty() { None } else { Some(date.to_string()) }
+}
+
+// ===== 個別銘柄ニュース取得（Yahoo!ファイナンス） =====
+pub async fn fetch_news_for_code(code: &str) -> Result<Vec<NewsItem>, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+    Ok(fetch_news(&client, code).await)
+}
+
+async fn fetch_news(client: &reqwest::Client, code: &str) -> Vec<NewsItem> {
+    let url = format!("https://finance.yahoo.co.jp/quote/{}.T/news", code);
+    let html = match client.get(&url).send().await {
+        Ok(resp) => match resp.text().await { Ok(h) => h, Err(_) => return vec![] },
+        Err(_) => return vec![],
+    };
+
+    fn extract_tag_text(s: &str, tag: &str) -> Option<String> {
+        let open = format!("<{}", tag);
+        let p = s.find(&open)?;
+        let gt = s[p..].find('>')? + p + 1;
+        let close = format!("</{}>", tag);
+        let end = s[gt..].find(&close)? + gt;
+        Some(s[gt..end].trim().to_string())
+    }
+
+    let mut items = Vec::new();
+    let mut pos = 0;
+    while items.len() < 8 {
+        let abs = match html[pos..].find("<article") {
+            Some(r) => pos + r,
+            None => break,
+        };
+        let end = html[abs..].find("</article>").map(|e| e + abs + 11).unwrap_or(html.len());
+        let block = &html[abs..end];
+
+        if let Some(title) = extract_tag_text(block, "h3") {
+            let time = extract_tag_text(block, "time").unwrap_or_default();
+            // <li> を順に走査し、2番目（時刻の次）をメディア名とみなす
+            let mut media = String::new();
+            let mut li_pos = 0;
+            let mut li_count = 0;
+            while let Some(lr) = block[li_pos..].find("<li") {
+                let la = li_pos + lr;
+                let lgt = match block[la..].find('>') { Some(g) => la + g + 1, None => break };
+                let lend = match block[lgt..].find("</li>") { Some(e) => lgt + e, None => break };
+                li_count += 1;
+                if li_count == 2 { media = block[lgt..lend].trim().to_string(); break; }
+                li_pos = lend + 5;
+            }
+            items.push(NewsItem { title, time, media });
+        }
+        pos = end;
+    }
+    items
+}
+
+// ===== 信用残高・財務指標取得（株探） =====
+// 株探の銘柄ページから「信用取引（単位:千株）」テーブルと stockinfo_i3（PER/PBR/利回り）を取得
 // 売り残・買い残は千株単位 → 万株に変換して返す
-async fn fetch_credit(client: &reqwest::Client, code: &str) -> (Option<f64>, Option<f64>, Option<f64>) {
+async fn fetch_credit(client: &reqwest::Client, code: &str) -> (Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, Option<f64>) {
     let url = format!("https://kabutan.jp/stock/?code={}", code);
     let html = match client.get(&url).send().await {
-        Ok(resp) => match resp.text().await { Ok(h) => h, Err(_) => return (None, None, None) },
-        Err(_) => return (None, None, None),
+        Ok(resp) => match resp.text().await { Ok(h) => h, Err(_) => return (None, None, None, None, None, None) },
+        Err(_) => return (None, None, None, None, None, None),
     };
+
+    fn nth_td(s: &str, n: usize) -> Option<f64> {
+        let mut rest = s;
+        for _ in 0..=n {
+            let p = rest.find("<td>")?;
+            rest = &rest[p + 4..];
+        }
+        let end = rest.find("</td>")?;
+        let raw = &rest[..end];
+        // タグ・空白・カンマを除去
+        let clean: String = raw.chars()
+            .filter(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        clean.parse::<f64>().ok()
+    }
 
     // 「信用取引」テーブルの最初の <tbody><tr> 内の td[0]=売り残, td[1]=買い残, td[2]=倍率
     fn parse_credit(html: &str) -> Option<(f64, f64, f64)> {
@@ -298,35 +409,41 @@ async fn fetch_credit(client: &reqwest::Client, code: &str) -> (Option<f64>, Opt
         let row_end   = tail[row_start..].find("</tr>").map(|p| p + row_start).unwrap_or(tail.len());
         let row = &tail[row_start..row_end];
 
-        fn nth_td(s: &str, n: usize) -> Option<f64> {
-            let mut rest = s;
-            for _ in 0..=n {
-                let p = rest.find("<td>")?;
-                rest = &rest[p + 4..];
-            }
-            let end = rest.find("</td>")?;
-            let raw = &rest[..end];
-            // タグ・空白・カンマを除去
-            let clean: String = raw.chars()
-                .filter(|c| c.is_ascii_digit() || *c == '.')
-                .collect();
-            clean.parse::<f64>().ok()
-        }
-
         let sell  = nth_td(row, 0)?;   // 売り残（千株）
         let buy   = nth_td(row, 1)?;   // 買い残（千株）
         let ratio = nth_td(row, 2)?;   // 信用倍率
         Some((sell, buy, ratio))
     }
 
-    match parse_credit(&html) {
+    // stockinfo_i3 テーブル: td[0]=PER, td[1]=PBR, td[2]=利回り
+    fn parse_financials(html: &str) -> Option<(f64, f64, f64)> {
+        let base = html.find(r#"id="stockinfo_i3""#)?;
+        let tail = &html[base..];
+        let tbody = tail.find("<tbody>")?;
+        let row_start = tail[tbody..].find("<tr>")? + tbody;
+        let row_end   = tail[row_start..].find("</tr>").map(|p| p + row_start).unwrap_or(tail.len());
+        let row = &tail[row_start..row_end];
+
+        let per = nth_td(row, 0)?;
+        let pbr = nth_td(row, 1)?;
+        let div_yield = nth_td(row, 2)?;
+        Some((per, pbr, div_yield))
+    }
+
+    let (margin_buy, margin_sell, credit_ratio) = match parse_credit(&html) {
         Some((sell_k, buy_k, ratio)) => (
             Some((buy_k  / 10.0 * 10.0).round() / 10.0),  // 千株→万株（小数1桁）
             Some((sell_k / 10.0 * 10.0).round() / 10.0),
             Some((ratio  * 100.0).round() / 100.0),
         ),
         None => (None, None, None),
-    }
+    };
+    let (per, pbr, dividend_yield) = match parse_financials(&html) {
+        Some((p, b, y)) => (Some(p), Some(b), Some(y)),
+        None => (None, None, None),
+    };
+
+    (margin_buy, margin_sell, credit_ratio, per, pbr, dividend_yield)
 }
 
 fn japanese_name(code: &str) -> Option<String> {
