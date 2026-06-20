@@ -13,9 +13,17 @@
   --accent-orange: #f0883e;
   --button-bg: #21262d;
   --button-hover: #30363d;
+  --font-mono: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+.cell-code, .cell-price, .cell-change, .cell-prev, .cell-open, .cell-hl, .cell-volume, .cell-ma, .cell-ind, .cell-rsi, .cell-credit, .cell-pnl { font-family: var(--font-mono); }
+body.font-bold .cell-code, body.font-bold .cell-price, body.font-bold .cell-change, body.font-bold .cell-prev, body.font-bold .cell-open, body.font-bold .cell-hl, body.font-bold .cell-volume, body.font-bold .cell-ma, body.font-bold .cell-ind, body.font-bold .cell-rsi, body.font-bold .cell-credit, body.font-bold .cell-pnl { font-weight: 700; }
+
+.cell-earnings { font-size: 0.82em; color: var(--text-secondary); }
+.cell-earnings.earnings-soon { color: var(--accent-orange); }
+.cell-earnings.earnings-near { color: var(--accent-red); font-weight: 600; }
+.cell-earnings.earnings-today { color: var(--accent-red); font-weight: 700; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif; background: var(--bg-primary); color: var(--text-primary); height: 100vh; overflow: hidden; }
 #app { display: flex; flex-direction: column; height: 100vh; }
 
@@ -67,6 +75,40 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 #ms-reset-btn:hover { color: var(--text-primary); background: var(--button-hover); }
 #ms-apply-btn { background: var(--accent-blue); border: none; color: #fff; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 0.82em; }
 #ms-apply-btn:hover { opacity: 0.85; }
+
+#theme-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+#theme-btn:hover { color: var(--text-primary); background: var(--button-hover); }
+
+/* テーマ・フォント設定パネル */
+#theme-panel { display: none; position: fixed; z-index: 300; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; min-width: 220px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); flex-direction: column; gap: 8px; }
+#theme-panel.open { display: flex; }
+.theme-panel-header { font-size: 0.78em; font-weight: 600; color: var(--text-secondary); padding-bottom: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 2px; }
+.theme-row { display: flex; flex-direction: column; gap: 4px; font-size: 0.82em; color: var(--text-secondary); }
+.theme-row select { background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 6px; border-radius: 4px; font-size: 0.9em; outline: none; }
+.theme-row select:focus { border-color: var(--accent-blue); }
+
+/* 銘柄検索候補パネル */
+#search-panel { display: none; position: fixed; z-index: 300; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 4px; min-width: 220px; max-height: 280px; overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.4); flex-direction: column; gap: 1px; }
+#search-panel.open { display: flex; }
+.search-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: none; border: none; color: var(--text-primary); padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em; text-align: left; width: 100%; }
+.search-item:hover { background: var(--button-hover); }
+.search-code { color: var(--text-secondary); font-size: 0.85em; }
+
+/* チャートポップアップ */
+#chart-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; align-items: center; justify-content: center; }
+#chart-modal-overlay.open { display: flex; }
+#chart-modal { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; width: 720px; max-width: 90vw; padding: 16px; }
+#chart-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+#chart-modal-title { font-size: 0.95em; font-weight: 600; color: var(--text-primary); }
+#chart-modal-close { background: var(--button-bg); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 4px; width: 26px; height: 26px; cursor: pointer; }
+#chart-modal-close:hover { color: var(--text-primary); background: var(--button-hover); }
+#chart-modal-body { width: 100%; height: 300px; }
+#chart-modal-news { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color); max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.news-item { display: flex; gap: 8px; align-items: baseline; font-size: 0.82em; }
+.news-time { color: var(--text-muted); flex-shrink: 0; min-width: 36px; }
+.news-title { color: var(--text-primary); flex: 1; }
+.news-media { color: var(--text-secondary); font-size: 0.85em; flex-shrink: 0; }
+.news-loading, .news-empty, .chart-empty { color: var(--text-secondary); font-size: 0.85em; text-align: center; padding: 12px; }
 
 /* 列パネル */
 #col-panel { display: none; position: fixed; z-index: 300; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; min-width: 240px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); flex-direction: column; gap: 2px; }
@@ -153,6 +195,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 .cell-name { color: var(--text-secondary); font-size: 0.84em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cell-name .ja { color: var(--text-primary); font-size: 0.95em; display: block; }
 .cell-name .en { color: var(--text-muted); font-size: 0.78em; display: block; }
+
+/* ===== 1行/3行表示切替 ===== */
+#row-mode-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+#row-mode-btn:hover { color: var(--text-primary); background: var(--button-hover); }
+.table-header.row-mode-3, .row-mode-3 .stock-row { min-width: unset; }
+.row-mode-3 .stock-row { padding: 8px 10px; align-items: stretch; }
+.g3-cell { display: flex; flex-direction: column; gap: 2px; justify-content: center; width: 100%; overflow: hidden; }
+.g3-cell > * { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .cell-price { font-weight: 700; font-size: 1.02em; transition: background-color 0.3s; }
 
@@ -297,6 +347,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 #note-save-btn:hover { opacity: 0.9; }
 #note-clear-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
 #note-clear-btn:hover { color: var(--accent-red); }
+
+/* ===== 行カラーマークパネル ===== */
+#color-panel { display: none; position: fixed; z-index: 310; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; min-width: 200px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); flex-direction: column; gap: 8px; }
+#color-panel.open { display: flex; }
+.color-panel-title { font-size: 0.82em; font-weight: 600; color: var(--text-secondary); }
+.color-code { color: var(--accent-blue); }
+.color-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.color-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.color-swatch:hover { border-color: var(--text-primary); }
+.color-swatch.active { border-color: var(--text-primary); box-shadow: 0 0 0 1px var(--bg-secondary) inset; }
+.color-panel-btns { display: flex; gap: 6px; }
+#color-clear-btn { background: var(--button-bg); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; flex: 1; }
+#color-clear-btn:hover { color: var(--accent-red); }
 
 /* ===== 密度切替 ===== */
 body.density-compact .stock-row { padding: 3px 10px; font-size: 0.76em; }

@@ -24,6 +24,10 @@ export const ALL_COLS = [
   { k: "creditRatio",w: "60px",                  label: "信用倍率",  movable: true, toggle: "credit" },
   { k: "marginBuy",  w: "72px",                  label: "買い残",    movable: true, toggle: "credit" },
   { k: "marginSell", w: "72px",                  label: "売り残",    movable: true, toggle: "credit" },
+  { k: "per",        w: "60px",                  label: "PER",       movable: true, toggle: "fin" },
+  { k: "pbr",        w: "56px",                  label: "PBR",       movable: true, toggle: "fin" },
+  { k: "dividendYield", w: "64px",                label: "利回り",    movable: true, toggle: "fin" },
+  { k: "earningsDate", w: "100px",                label: "決算発表",  movable: true, toggle: "fin" },
   { k: "pnl",        w: "88px",                  label: "損益",      movable: true, toggle: "pnl" },
   { k: "alert",      w: "72px",                  label: "アラート",  movable: true, toggle: "alert" },
   { k: "note",       w: "32px",                  label: "メモ",      movable: true, toggle: "note" },
@@ -47,6 +51,7 @@ export const TOGGLE_LABELS = [
   ["signals", "シグナル"],
   ["w52",     "52週高値/安値"],
   ["credit",  "信用倍率 / 信用残高"],
+  ["fin",     "PER / PBR / 利回り"],
   ["pnl",     "損益（ポートフォリオ）"],
   ["alert",   "価格アラート"],
   ["note",    "銘柄メモ"],
@@ -54,7 +59,22 @@ export const TOGGLE_LABELS = [
 
 export const MOVABLE_KEYS = ALL_COLS.filter(c => c.movable).map(c => c.k);
 
-export const NEW_MOVABLE_KEYS = ["w52hi", "w52lo", "creditRatio", "marginBuy", "marginSell", "pnl"];
+export const NEW_MOVABLE_KEYS = ["w52hi", "w52lo", "creditRatio", "marginBuy", "marginSell", "per", "pbr", "dividendYield", "earningsDate", "pnl"];
+
+// ===== 3行表示モード用の列グループ定義 =====
+export const COL_GROUPS_3ROW = [
+  { k: "g1",  w: "minmax(110px, 1fr)", label: "銘柄",        rows: ["code", "name"] },
+  { k: "g2",  w: "100px",              label: "株価",        rows: ["price", "prev", "change"] },
+  { k: "g3",  w: "85px",               label: "チャート",     rows: ["spark", "volume", "pnl"] },
+  { k: "g4",  w: "90px",               label: "始高安",       rows: ["open", "high", "low"] },
+  { k: "g5",  w: "75px",               label: "MA",          rows: ["ma5", "ma25", "ma75"] },
+  { k: "g6",  w: "70px",               label: "指標",         rows: ["macd", "sig", "rsi"] },
+  { k: "g7",  w: "minmax(100px, 1fr)", label: "判定/シグナル", rows: ["score", "signals"] },
+  { k: "g8",  w: "68px",               label: "52週",        rows: ["w52hi", "w52lo"] },
+  { k: "g9",  w: "78px",               label: "信用",        rows: ["creditRatio", "marginBuy", "marginSell"] },
+  { k: "g10", w: "62px",               label: "財務",        rows: ["per", "pbr", "dividendYield"] },
+  { k: "g11", w: "60px",               label: "管理",        rows: ["alert", "note"] },
+];
 
 // ===== 取引時間デフォルト =====
 export const MARKET_SESSION_DEFAULT = {

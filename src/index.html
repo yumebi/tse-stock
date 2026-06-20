@@ -19,10 +19,12 @@
       </div>
       <div id="index-display">
         <span id="idx-n225" class="idx-item">日経 ---</span>
+        <span id="idx-n225f" class="idx-item">日経先物 ---</span>
+        <span id="idx-usdjpy" class="idx-item">USD/JPY ---</span>
         <span id="market-status" class="market-status"></span>
       </div>
       <div id="add-stock">
-        <input type="text" id="stock-code-input" placeholder="銘柄コード（例: 7203）" />
+        <input type="text" id="stock-code-input" placeholder="銘柄コード or 企業名（例: 7203 / トヨタ）" />
         <button id="add-btn">追加</button>
         <button id="pause-btn" title="自動更新の停止/再開">⏸</button>
         <button id="refresh-btn" title="今すぐ更新">🔄</button>
@@ -37,6 +39,7 @@
         <button id="import-btn" title="銘柄を一括インポート">📋</button>
         <button id="export-btn" title="CSVエクスポート">📥</button>
         <button id="density-btn" title="行の高さ切替">標準</button>
+        <button id="row-mode-btn" title="1行表示/3行表示切替">1行</button>
         <select id="spark-sel" title="チャート期間">
           <option value="1d">1日</option>
           <option value="3d">3日</option>
@@ -53,6 +56,7 @@
         </span>
         <button id="sig-cat-btn" title="表示シグナルの種類を選択">📶</button>
         <button id="market-session-btn" title="取引時間設定">⏰</button>
+        <button id="theme-btn" title="テーマ・フォント設定">🎨</button>
       </div>
       <div id="status-msg"></div>
     </div>
@@ -100,6 +104,10 @@
     <span class="leg-item" data-tip="【信用倍率】信用買い残 ÷ 信用売り残&#10;赤（5倍以上）: 買い越しが多く将来の整理売り圧力に注意&#10;緑（0.5倍以下）: 空売り優位、踏み上げ反騰の可能性&#10;倍率が高いほど将来の需給悪化リスクがある&#10;週次更新（毎週金曜）　出典: 株探"><i class="leg-dot" style="background:#f85149"></i>信用倍率</span>
     <span class="leg-item" data-tip="【買い残】信用買い残高（万株）&#10;投資家が信用取引で買って未決済の株数&#10;増加 → 相場への期待感を示すが、将来の売り圧力にもなる&#10;急増 → 過熱のサインになることも&#10;単位: 万株（千株÷10）　週次更新　出典: 株探"><i class="leg-dot" style="background:#3fb950"></i>買い残</span>
     <span class="leg-item" data-tip="【売り残】信用売り残高（万株）&#10;投資家が空売りして未決済の株数&#10;増加 → 弱気見通しが多いが、ショートカバー（踏み上げ）で急騰することも&#10;売り残が多い銘柄は反発時の上昇幅が大きくなりやすい&#10;単位: 万株（千株÷10）　週次更新　出典: 株探"><i class="leg-dot" style="background:#58a6ff"></i>売り残</span>
+    <span class="leg-item" data-tip="【PER】株価収益率（倍）&#10;株価 ÷ 1株当たり利益（予想）&#10;低いほど割安とされる目安。業種により標準水準が異なる&#10;出典: 株探"><i class="leg-dot" style="background:#8b949e"></i>PER</span>
+    <span class="leg-item" data-tip="【PBR】株価資産倍率（倍）&#10;株価 ÷ 1株当たり純資産&#10;1倍未満は資産価値より株価が安いことを示す&#10;出典: 株探"><i class="leg-dot" style="background:#8b949e"></i>PBR</span>
+    <span class="leg-item" data-tip="【配当利回り】1株当たり配当 ÷ 株価（予想）&#10;高いほど株価に対する配当収入の割合が大きい&#10;出典: 株探"><i class="leg-dot" style="background:#3fb950"></i>利回り</span>
+    <span class="leg-item" data-tip="【決算発表】次回決算発表予定日&#10;橙: 7日以内　赤: 3日以内　赤太字: 当日&#10;発表予定が未確定の銘柄は「-」表示&#10;出典: Yahoo!ファイナンス"><i class="leg-dot" style="background:#f0883e"></i>決算発表</span>
   </div>
   <div id="leg-tip"></div>
   <script type="module" src="/main.js"></script>
