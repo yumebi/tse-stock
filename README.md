@@ -2,7 +2,7 @@
 
 Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリングアプリです（約15分ディレイ）。
 
-![version](https://img.shields.io/badge/version-1.0.3-brightgreen) ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
+![version](https://img.shields.io/badge/version-1.1.0-brightgreen) ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
 
 ## 🚀 クイックスタート
 
@@ -37,7 +37,9 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 - 更新間隔を選択可能（15秒 / 30秒 / 1分 / 2分 / 5分）
 - ⏸ ボタンで自動更新を一時停止・再開
 - 🔄 ボタンで手動即時更新
-- ウィンドウタイトルにアプリバージョンを表示（例: `YMB TSE Stock v1.0.3 - 東証株価`）
+- ウィンドウタイトルにアプリバージョンを表示（例: `YMB TSE Stock v1.1.0 - 東証株価`）
+- 起動時に最新バージョンをチェックし、更新があればステータスバーに通知
+- 東証の取引時間を設定可能（昼休み・24時間取引モードにも対応、⏰ ボタン）
 
 ### 🗂 タブ管理
 - 複数タブで銘柄リストを用途別に整理
@@ -76,6 +78,14 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 
 シグナル列にスコアで判定：🟢 買い優勢 / 🔴 売り優勢。フィルターボタンで絞り込み可能。
 
+### 💳 信用残・財務指標・決算発表日
+- **信用倍率 / 買い残 / 売り残**: 株探から取得（週次更新）
+- **PER / PBR / 配当利回り**: 株探から取得
+- **決算発表予定日**: Yahoo!ファイナンスから取得。7日以内で橙、3日以内で赤、当日は赤太字表示
+
+### 📰 チャート＆ニュースポップアップ
+- 銘柄行クリックで直近1年の終値チャート（lightweight-charts）とその銘柄の関連ニュース一覧をポップアップ表示
+
 ### 📶 表示シグナルの種類選択
 - 📶 ボタンで11カテゴリのシグナル表示をON/OFF切り替え
 - 全ON / 全OFF の一括操作にも対応
@@ -108,9 +118,23 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 ### 🎛 表示カスタマイズ
 - **列の表示/非表示**: ☰ ボタンで各列を個別にオン/オフ
 - **行の高さ切り替え**: 標準 / コンパクト / 広め
-- **ソート**: 列ヘッダークリックで昇順/降順ソート
+- **1行/3行表示切り替え**: 関連項目をグループ化した3行レイアウトに切り替え可能
+- **ソート**: 列ヘッダークリックで昇順/降順ソート（タブごとに保存）
 - **シグナルフィルター**: 全表示 / 買いシグナル優勢のみ / 売りシグナル優勢のみ
 - **出来高ヒートマップ**: 出来高の多少を色の濃淡で視覚化
+- **企業名列の自動幅調整**: 表示中銘柄の最長企業名に合わせて自動でリサイズ
+- **行カラーマーク**: コード列を右クリックして銘柄ごとに色タグ付け
+- **キーボードショートカット**: `Ctrl+R` 即時更新 / `Ctrl+T` 新規タブ追加
+
+### 🎨 テーマ＆フォント
+- 🎨 ボタンからテーマ12種（GitHub Dark / Dracula / Nord / Tokyo Night 等）とフォント22種（JetBrains Mono / Orbitron 等、Google Fonts）を選択可能
+- フォント太字表示のON/OFF切り替え
+
+### 🔍 銘柄検索
+- 入力欄に企業名（日本語）を入力するとコード候補をドロップダウン表示
+
+### 📈 指数ウィジェット
+- ヘッダーに日経平均・日経225先物・米ドル円(USD/JPY)をリアルタイム表示
 
 ### 🗺 凡例
 - 右下に常時表示。各指標・シグナルにマウスオーバーで詳細説明をポップアップ表示
@@ -127,8 +151,10 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 | フレームワーク | [Tauri v2](https://v2.tauri.app/) |
 | バックエンド | Rust (reqwest, serde, chrono, tokio) |
 | フロントエンド | Vanilla JS (ES Modules) + CSS Grid |
+| チャート描画 | [lightweight-charts](https://github.com/tradingview/lightweight-charts) |
 | バンドラ | Vite |
-| データソース | [Yahoo Finance API](https://query1.finance.yahoo.com/v8/finance/chart/) + [みんかぶ](https://minkabu.jp) |
+| データソース | [Yahoo Finance API](https://query1.finance.yahoo.com/v8/finance/chart/) / [みんかぶ](https://minkabu.jp) / [株探](https://kabutan.jp) / [Yahoo!ファイナンス](https://finance.yahoo.co.jp) |
+| CI/CD | GitHub Actions（タグpushで自動ビルド・Release公開） |
 
 ## アーキテクチャのポイント
 
@@ -136,28 +162,33 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 各行のデータをハッシュ化し、前回と変化がある行だけ DOM を更新。シグナルアニメーション（マーキー）が不必要に中断されない。
 
 ### 並列 HTTP リクエスト（Rust）
-株価取得時に当日データ・ヒストリカルデータ・分足データを `tokio::spawn` で並列取得。みんかぶからの企業名取得は名前がキャッシュ済みの場合はリクエスト自体をスキップ。
+株価取得時に当日データ・ヒストリカルデータ・分足データ・信用残＆財務指標（株探）・決算発表予定日（Yahoo!ファイナンス）を `tokio::spawn` で並列取得。みんかぶからの企業名取得は名前がキャッシュ済みの場合はリクエスト自体をスキップ。
 
 ### ES モジュール分割
-フロントエンドを8つのモジュールに分割し、循環依存なしで管理。
+フロントエンドを11個のモジュールに分割し、循環依存なしで管理。
 
 ## プロジェクト構成
 
 ```
 tse-stock/
+├── .github/workflows/          # CI/CD（タグpushで自動ビルド・Release）
+│   └── release.yml
 ├── src/                        # フロントエンド
 │   ├── index.html              # UIレイアウト・凡例
 │   ├── style.css               # ダークテーマ + CSS Grid
 │   ├── main.js                 # エントリポイント・イベント統合
 │   └── lib/                    # ES モジュール群
-│       ├── constants.js        # 定数（列定義・シグナルカテゴリ等）
+│       ├── constants.js        # 定数（列定義・シグナルカテゴリ・3行表示グループ等）
 │       ├── state.js            # 状態管理・永続化
 │       ├── audio.js            # 音声・OS通知
 │       ├── indicators.js       # 指標計算・シグナルフィルター
 │       ├── columns.js          # 列の表示/非表示・並び順管理
-│       ├── sticky.js           # ピン留め列の sticky 配置
+│       ├── sticky.js           # ピン留め列の sticky 配置・企業名列自動幅調整
 │       ├── tabs.js             # タブ管理
-│       └── render.js           # 差分レンダリング・シグナルアニメーション
+│       ├── render.js           # 差分レンダリング・シグナルアニメーション
+│       ├── themes.js           # テーマ定義（12種）
+│       ├── fonts.js            # フォント定義（22種、Google Fonts）
+│       └── companyNames.js     # 企業名検索用ローカル辞書
 ├── src-tauri/                  # バックエンド (Rust)
 │   ├── Cargo.toml
 │   ├── tauri.conf.json
@@ -166,7 +197,8 @@ tse-stock/
 │   └── src/
 │       ├── main.rs             # エントリポイント
 │       ├── lib.rs              # Tauri コマンド登録
-│       └── stock.rs            # 株価取得・指標計算・シグナル判定
+│       └── stock.rs            # 株価取得・指標計算・シグナル判定・ニュース/決算日取得
+├── version.json                # 自動更新チェック用バージョン情報
 ├── package.json
 ├── vite.config.js
 └── .gitignore
