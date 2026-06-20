@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow, availableMonitors } from "@tauri-apps/api/window";
+import { getCurrentWindow, availableMonitors, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 
 import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS, SIG_CATEGORIES, MARKET_SESSION_DEFAULT } from "./lib/constants.js";
@@ -77,9 +77,9 @@ async function restoreWindow() {
         y >= m.position.y && y < m.position.y + m.size.height
       );
       if (!fits && monitors.length > 0) { x = monitors[0].position.x + 40; y = monitors[0].position.y + 40; }
-      await win.setPosition({ x, y });
+      await win.setPosition(new PhysicalPosition(x, y));
     }
-    if (w && h) await win.setSize({ width: w, height: h });
+    if (w && h) await win.setSize(new PhysicalSize(w, h));
   } catch (_) {}
 }
 async function saveWindowPos() {
@@ -935,7 +935,7 @@ async function init() {
   initRenderHelpers(setStatus, sortArr);
   initTabs(tabsEl, render, saveAll);
 
-  restoreWindow();
+  try { await restoreWindow(); } finally { win.show(); }
   checkForUpdate();
   applyTheme(state.theme);
   applyFont(state.font);
@@ -972,9 +972,14 @@ async function init() {
 let saveT;
 win.onResized(() => { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); });
 win.onMoved(() => { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); });
-win.onCloseRequested(() => {
+let isClosing = false;
+win.onCloseRequested(async (event) => {
+  if (isClosing) return;
+  event.preventDefault();
+  isClosing = true;
   clearTimeout(saveT);
-  saveWindowPos();
+  await saveWindowPos();
+  await win.close();
 });
 
 // ===== 進捗イベント =====
