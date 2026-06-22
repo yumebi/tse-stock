@@ -600,6 +600,12 @@ async function fetchCodesIntoActiveTab(codes) {
 
 async function addStock(code) {
   code = code.trim(); if (!code) return;
+  if (!/^\d+$/.test(code)) {
+    const entries = Object.entries(COMPANY_NAMES_JA);
+    const hit = entries.find(([, name]) => name === code) || entries.find(([, name]) => name.includes(code));
+    if (!hit) { setStatus(`${code} に該当する銘柄が見つかりません`, true); return; }
+    code = hit[0];
+  }
   const arr = stocks(); if (arr.find(s => s.code === code)) { setStatus(`${code} は既に追加済み`, true); return; }
   setStatus(`${code} 取得中...`, false);
   try {
