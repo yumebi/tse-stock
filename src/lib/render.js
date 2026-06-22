@@ -189,11 +189,18 @@ function computeRowHash(s, fl, isFirst, isLast) {
 export function render() {
   const stks = stocks();
   if (stks.length === 0) {
-    _stockList.innerHTML = `<div class="empty-state">銘柄がありません。上の入力欄からコードを追加してください。</div>`;
+    const failed = state.tabs[state.activeTabIdx]?.fetchFailed;
+    _stockList.innerHTML = failed
+      ? `<div class="empty-state">銘柄データの取得に失敗しました。しばらく待って🔄（今すぐ更新）で再試行してください。</div>`
+      : `<div class="empty-state">銘柄がありません。上の入力欄からコードを追加してください。</div>`;
     _tableHeader.style.gridTemplateColumns = "";
     _rowHashes.clear(); _layoutKey = "";
     return;
   }
+
+  // 空状態からの復帰時、差分更新ロジックが拾わない empty-state を明示的に除去
+  const emptyEl = _stockList.querySelector(".empty-state");
+  if (emptyEl) emptyEl.remove();
 
   const is3Row = state.rowMode === "3row";
   const cols = is3Row ? visibleCols3() : visibleCols();

@@ -324,15 +324,16 @@ pub async fn fetch_news_for_code(code: &str) -> Result<Vec<NewsItem>, String> {
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
-    Ok(fetch_news(&client, code).await)
+    fetch_news(&client, code).await
 }
 
-async fn fetch_news(client: &reqwest::Client, code: &str) -> Vec<NewsItem> {
+async fn fetch_news(client: &reqwest::Client, code: &str) -> Result<Vec<NewsItem>, String> {
     let url = format!("https://finance.yahoo.co.jp/quote/{}.T/news", code);
-    let html = match client.get(&url).send().await {
-        Ok(resp) => match resp.text().await { Ok(h) => h, Err(_) => return vec![] },
-        Err(_) => return vec![],
-    };
+    let resp = client.get(&url).send().await.map_err(|e| format!("Request error: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    let html = resp.text().await.map_err(|e| format!("Read error: {}", e))?;
 
     fn extract_tag_text(s: &str, tag: &str) -> Option<String> {
         let open = format!("<{}", tag);
@@ -371,7 +372,7 @@ async fn fetch_news(client: &reqwest::Client, code: &str) -> Vec<NewsItem> {
         }
         pos = end;
     }
-    items
+    Ok(items)
 }
 
 // ===== 信用残高・財務指標取得（株探） =====

@@ -586,6 +586,18 @@ tableHeader.addEventListener("click", e => {
 });
 
 // ===== 銘柄操作 =====
+async function fetchCodesIntoActiveTab(codes) {
+  for (const code of codes) {
+    try {
+      const data = await invoke("fetch_stock_cmd", stockInvokeParams(code));
+      const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); }
+      data._volAvg = data.volume; stocks().push(data); state.prevSignals[code] = hash(data.signals);
+    } catch (e) { setStatus(`${code} 失敗: ${e}`, true); }
+  }
+  const tab = state.tabs[state.activeTabIdx];
+  if (tab) { tab.pendingCodes = codes; tab.fetchFailed = codes.length > 0 && stocks().length === 0; }
+}
+
 async function addStock(code) {
   code = code.trim(); if (!code) return;
   const arr = stocks(); if (arr.find(s => s.code === code)) { setStatus(`${code} は既に追加済み`, true); return; }
@@ -602,6 +614,7 @@ function removeStock(code) {
   const arr = stocks(); setStocks(arr.filter(s => s.code !== code));
   delete state.prevSignals[code]; delete state.priceDirs[code];
   delete state.alerts[code]; delete state.notes[code];
+  if (stocks().length === 0) { const t = state.tabs[state.activeTabIdx]; if (t) t.fetchFailed = false; }
   saveAll(); saveAlerts(); saveNotes(); render();
   scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
 }
@@ -753,7 +766,16 @@ intervalSel.addEventListener("change", () => {
 });
 
 refreshBtn.addEventListener("click", async () => {
-  if (stocks().length === 0) return;
+  if (stocks().length === 0) {
+    const tab = state.tabs[state.activeTabIdx];
+    if (!tab?.pendingCodes?.length) return;
+    setStatus("再取得中...", false);
+    await fetchCodesIntoActiveTab(tab.pendingCodes);
+    saveAll(); render();
+    scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+    setStatus(stocks().length > 0 ? "再取得完了" : "再取得できませんでした", stocks().length === 0);
+    return;
+  }
   setStatus("更新中...", false);
   await fetchAll();
 });
@@ -815,8 +837,8 @@ function openChartModal(code) {
     chartModalNews.innerHTML = news.length
       ? news.map(n => `<div class="news-item"><span class="news-time">${escapeHtml(n.time)}</span><span class="news-title">${escapeHtml(n.title)}</span><span class="news-media">${escapeHtml(n.media)}</span></div>`).join("")
       : `<div class="news-empty">関連ニュースが見つかりません</div>`;
-  }).catch(() => {
-    chartModalNews.innerHTML = `<div class="news-empty">ニュース取得に失敗しました</div>`;
+  }).catch((e) => {
+    chartModalNews.innerHTML = `<div class="news-empty">ニュース取得元に接続できません（${escapeHtml(String(e))}）</div>`;
   });
 }
 
@@ -953,13 +975,7 @@ async function init() {
   state.sortAsc = state.tabs[state.activeTabIdx]?.sortAsc ?? true;
   renderTabs();
   const codes = td[state.activeTabIdx]?.codes || DEFAULT_STOCKS;
-  for (const code of codes) {
-    try {
-      const data = await invoke("fetch_stock_cmd", stockInvokeParams(code));
-      const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); }
-      data._volAvg = data.volume; stocks().push(data); state.prevSignals[code] = hash(data.signals);
-    } catch (e) { setStatus(`${code} 失敗: ${e}`, true); }
-  }
+  await fetchCodesIntoActiveTab(codes);
   saveAll(); render();
   scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
   setStatus(stocks().length > 0 ? "完了" : "取得できませんでした", stocks().length === 0);
