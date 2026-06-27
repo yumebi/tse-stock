@@ -2,7 +2,7 @@
 
 Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリングアプリです（約15分ディレイ）。
 
-![version](https://img.shields.io/badge/version-1.1.5-brightgreen) ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
+![version](https://img.shields.io/badge/version-1.1.9-brightgreen) ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
 
 ## 主な機能
 
@@ -13,7 +13,7 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 - 更新間隔を選択可能（15秒 / 30秒 / 1分 / 2分 / 5分）
 - ⏸ ボタンで自動更新を一時停止・再開
 - 🔄 ボタンで手動即時更新
-- ウィンドウタイトルにアプリバージョンを表示（例: `YMB TSE Stock v1.1.5 - 東証株価`）
+- ウィンドウタイトルにアプリバージョンを表示（例: `YMB TSE Stock v1.1.9 - 東証株価`）
 - 起動時に最新バージョンをチェックし、更新があればステータスバーに通知
 - 東証の取引時間を設定可能（昼休み・24時間取引モードにも対応、⏰ ボタン）
 
@@ -116,9 +116,7 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 - 右下に常時表示。各指標・シグナルにマウスオーバーで詳細説明をポップアップ表示
 
 ### 🗂 日本語企業名
-- 約200銘柄の日本語名を内蔵マッピング
-- マッピングにない銘柄は [みんかぶ](https://minkabu.jp) から自動取得・キャッシュ
-- キャッシュ済みの銘柄は次回以降 HTTP リクエストをスキップ（通信量削減）
+- 全上場銘柄（約3,700件）の日本語名を内蔵マッピング
 
 ## 開発環境のセットアップ
 
@@ -151,7 +149,6 @@ npm run tauri dev
 | フロントエンド | Vanilla JS (ES Modules) + CSS Grid |
 | チャート描画 | [lightweight-charts](https://github.com/tradingview/lightweight-charts) |
 | バンドラ | Vite |
-| データソース | [Yahoo Finance API](https://query1.finance.yahoo.com/v8/finance/chart/) / [みんかぶ](https://minkabu.jp) / [株探](https://kabutan.jp) / [Yahoo!ファイナンス](https://finance.yahoo.co.jp) |
 | CI/CD | GitHub Actions（タグpushで自動ビルド・Release公開） |
 
 ## プロジェクト構成
@@ -197,7 +194,7 @@ tse-stock/
 各行のデータをハッシュ化し、前回と変化がある行だけ DOM を更新。シグナルアニメーション（マーキー）が不必要に中断されない。
 
 ### 並列 HTTP リクエスト（Rust）
-株価取得時に当日データ・ヒストリカルデータ・分足データ・信用残＆財務指標（株探）・決算発表予定日（Yahoo!ファイナンス）を `tokio::spawn` で並列取得。みんかぶからの企業名取得は名前がキャッシュ済みの場合はリクエスト自体をスキップ。
+株価取得時に当日データ・ヒストリカルデータ・分足データ・信用残＆財務指標・決算発表予定日を `tokio::spawn` で並列取得。日本語企業名は内蔵マッピングのみで解決するため追加のリクエストは発生しない。
 
 ### ES モジュール分割
 フロントエンドを11個のモジュールに分割し、循環依存なしで管理。

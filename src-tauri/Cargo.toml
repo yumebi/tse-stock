@@ -1,6 +1,6 @@
 [package]
 name = "tse-stock"
-version = "1.1.7"
+version = "1.1.9"
 edition = "2021"
 
 [lib]
@@ -17,3 +17,4 @@ serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
+calamine = "0.26"

@@ -1,6 +1,6 @@
 mod stock;
 
-use stock::{fetch_index, fetch_news_for_code, fetch_stock};
+use stock::{fetch_index, fetch_news_for_code, fetch_stock, update_jpx_cache_if_needed};
 
 #[tauri::command]
 async fn fetch_stock_cmd(
@@ -25,6 +25,13 @@ async fn fetch_news_cmd(code: String) -> Result<Vec<stock::NewsItem>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                update_jpx_cache_if_needed(&handle).await;
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![fetch_stock_cmd, fetch_index_cmd, fetch_news_cmd])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
