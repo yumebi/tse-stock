@@ -4,31 +4,7 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 
 ![version](https://img.shields.io/badge/version-1.1.5-brightgreen) ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
 
-## 🚀 クイックスタート
-
-### インストーラー（推奨）
-
-最新版は [Releases ページ](https://github.com/yumebi/tse-stock/releases/latest) からダウンロードしてください。
-
-#### Windows
-
-| 形式 | ファイル名 |
-|---|---|
-| **NSIS インストーラー** | `YMB TSE Stock_x.x.x_x64-setup.exe` |
-| MSI インストーラー | `YMB TSE Stock_x.x.x_x64_en-US.msi` |
-| ポータブル版 | `tse-stock.exe` |
-
-> ※ Windows Defender が警告を出す場合があります。「詳細情報」→「実行」で起動してください。
-
-#### macOS
-
-| 形式 | ファイル名 |
-|---|---|
-| **DMG** | `YMB TSE Stock_x.x.x_universal.dmg` |
-
-> ※ 初回起動時に「開発元を確認できません」と表示される場合は、右クリック →「開く」で起動してください。
-
-## 機能
+## 主な機能
 
 ### 📊 株価モニタリング（約15分ディレイ）
 - 銘柄コード（4桁）で東証銘柄を追加・監視
@@ -144,6 +120,28 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 - マッピングにない銘柄は [みんかぶ](https://minkabu.jp) から自動取得・キャッシュ
 - キャッシュ済みの銘柄は次回以降 HTTP リクエストをスキップ（通信量削減）
 
+## 開発環境のセットアップ
+
+### 必要条件
+- [Rust](https://rustup.rs/) 1.70+
+- [Node.js](https://nodejs.org/) 18+
+- Windows: [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)（通常はOSに組み込み済み）
+
+### ソースからビルド
+
+```bash
+git clone https://github.com/yumebi/tse-stock.git
+cd tse-stock
+npm install
+npm run tauri build
+```
+
+### 開発モード（ホットリロード）
+
+```bash
+npm run tauri dev
+```
+
 ## 技術スタック
 
 | 層 | 技術 |
@@ -155,17 +153,6 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 | バンドラ | Vite |
 | データソース | [Yahoo Finance API](https://query1.finance.yahoo.com/v8/finance/chart/) / [みんかぶ](https://minkabu.jp) / [株探](https://kabutan.jp) / [Yahoo!ファイナンス](https://finance.yahoo.co.jp) |
 | CI/CD | GitHub Actions（タグpushで自動ビルド・Release公開） |
-
-## アーキテクチャのポイント
-
-### 差分レンダリング
-各行のデータをハッシュ化し、前回と変化がある行だけ DOM を更新。シグナルアニメーション（マーキー）が不必要に中断されない。
-
-### 並列 HTTP リクエスト（Rust）
-株価取得時に当日データ・ヒストリカルデータ・分足データ・信用残＆財務指標（株探）・決算発表予定日（Yahoo!ファイナンス）を `tokio::spawn` で並列取得。みんかぶからの企業名取得は名前がキャッシュ済みの場合はリクエスト自体をスキップ。
-
-### ES モジュール分割
-フロントエンドを11個のモジュールに分割し、循環依存なしで管理。
 
 ## プロジェクト構成
 
@@ -204,27 +191,38 @@ tse-stock/
 └── .gitignore
 ```
 
-## 開発環境のセットアップ
+## アーキテクチャのポイント
 
-### 必要条件
-- [Rust](https://rustup.rs/) 1.70+
-- [Node.js](https://nodejs.org/) 18+
-- Windows: [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)（通常はOSに組み込み済み）
+### 差分レンダリング
+各行のデータをハッシュ化し、前回と変化がある行だけ DOM を更新。シグナルアニメーション（マーキー）が不必要に中断されない。
 
-### ソースからビルド
+### 並列 HTTP リクエスト（Rust）
+株価取得時に当日データ・ヒストリカルデータ・分足データ・信用残＆財務指標（株探）・決算発表予定日（Yahoo!ファイナンス）を `tokio::spawn` で並列取得。みんかぶからの企業名取得は名前がキャッシュ済みの場合はリクエスト自体をスキップ。
 
-```bash
-git clone https://github.com/yumebi/tse-stock.git
-cd tse-stock
-npm install
-npm run tauri build
-```
+### ES モジュール分割
+フロントエンドを11個のモジュールに分割し、循環依存なしで管理。
 
-### 開発モード（ホットリロード）
+## ダウンロード
 
-```bash
-npm run tauri dev
-```
+最新版は [Releases ページ](https://github.com/yumebi/tse-stock/releases/latest) からダウンロードしてください。
+
+### Windows
+
+| 形式 | ファイル名 |
+|---|---|
+| **NSIS インストーラー** | `YMB TSE Stock_x.x.x_x64-setup.exe` |
+| MSI インストーラー | `YMB TSE Stock_x.x.x_x64_en-US.msi` |
+| ポータブル版 | `tse-stock.exe` |
+
+> ※ Windows Defender が警告を出す場合があります。「詳細情報」→「実行」で起動してください。
+
+### macOS
+
+| 形式 | ファイル名 |
+|---|---|
+| **DMG** | `YMB TSE Stock_x.x.x_universal.dmg` |
+
+> ※ 初回起動時に「開発元を確認できません」と表示される場合は、右クリック →「開く」で起動してください。
 
 ## ライセンス
 
