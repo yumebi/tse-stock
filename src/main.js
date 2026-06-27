@@ -13,8 +13,9 @@ import {
 } from "./lib/state.js";
 import { signalBeep, alertBeep, initNotifications, sendOsNotification } from "./lib/audio.js";
 import { scoreSignals, scoreText } from "./lib/indicators.js";
-import { visibleCols, getGroupOrder, moveGroup } from "./lib/columns.js";
-import { initSticky, applySticky, scheduleNameAutoSize } from "./lib/sticky.js";
+import { visibleCols, visibleCols3, getGroupOrder, moveGroup } from "./lib/columns.js";
+import { initSticky, applySticky, scheduleColumnsAutoSize } from "./lib/sticky.js";
+const currentVisibleCols = () => state.rowMode === "3row" ? visibleCols3() : visibleCols();
 import { initTabs, renderTabs, addTab, deleteTab } from "./lib/tabs.js";
 import { initRender, initRenderHelpers, render, renderCell, updateSigScroll, escapeHtml } from "./lib/render.js";
 import { THEMES, applyTheme } from "./lib/themes.js";
@@ -534,7 +535,7 @@ function openImportModal() {
       } catch (_) { ng.push(code); }
     }
     saveAll(); render();
-    scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+    scheduleColumnsAutoSize(tableHeader, stockList, saveColWidths, currentVisibleCols, applySticky);
     statusEl.textContent = `完了: ${ok}件追加${ng.length ? `、取得失敗: ${ng.join(", ")}` : ""}`;
   });
 }
@@ -612,7 +613,7 @@ async function addStock(code) {
     const data = await invoke("fetch_stock_cmd", stockInvokeParams(code));
     const nc = getNameCache(); if (data.nameJa && !nc[code]) { nc[code] = data.nameJa; saveNameCache(nc); }
     data._volAvg = data.volume; arr.push(data); setStocks(arr); saveAll(); render();
-    scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+    scheduleColumnsAutoSize(tableHeader, stockList, saveColWidths, currentVisibleCols, applySticky);
     setStatus(`${code} 追加完了`, false);
   } catch (e) { setStatus(`${code} の取得に失敗: ${e}`, true); }
 }
@@ -622,7 +623,7 @@ function removeStock(code) {
   delete state.alerts[code]; delete state.notes[code];
   if (stocks().length === 0) { const t = state.tabs[state.activeTabIdx]; if (t) t.fetchFailed = false; }
   saveAll(); saveAlerts(); saveNotes(); render();
-  scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+  scheduleColumnsAutoSize(tableHeader, stockList, saveColWidths, currentVisibleCols, applySticky);
 }
 
 // ===== 一時停止 =====
@@ -723,6 +724,7 @@ async function fetchAll() {
     } catch (_) {}
   }
   render(); fetchIndices();
+  if (anyOk) scheduleColumnsAutoSize(tableHeader, stockList, saveColWidths, currentVisibleCols, applySticky);
   if (anyOk && (sigBuy || sigSell)) signalBeep(sigBuy);
   if (state.signalFilter === "all") setStatus(`更新完了 ${new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`, false);
 }
@@ -778,7 +780,7 @@ refreshBtn.addEventListener("click", async () => {
     setStatus("再取得中...", false);
     await fetchCodesIntoActiveTab(tab.pendingCodes);
     saveAll(); render();
-    scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+    scheduleColumnsAutoSize(tableHeader, stockList, saveColWidths, currentVisibleCols, applySticky);
     setStatus(stocks().length > 0 ? "再取得完了" : "再取得できませんでした", stocks().length === 0);
     return;
   }
@@ -983,7 +985,7 @@ async function init() {
   const codes = td[state.activeTabIdx]?.codes || DEFAULT_STOCKS;
   await fetchCodesIntoActiveTab(codes);
   saveAll(); render();
-  scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleCols, applySticky);
+  scheduleColumnsAutoSize(tableHeader, stockList, saveColWidths, currentVisibleCols, applySticky);
   setStatus(stocks().length > 0 ? "完了" : "取得できませんでした", stocks().length === 0);
   fetchIndices();
   restartInterval();
@@ -992,7 +994,10 @@ async function init() {
 
 // ===== ウィンドウ保存 =====
 let saveT;
-win.onResized(() => { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); });
+win.onResized(() => {
+  clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500);
+  scheduleColumnsAutoSize(tableHeader, stockList, saveColWidths, currentVisibleCols, applySticky);
+});
 win.onMoved(() => { clearTimeout(saveT); saveT = setTimeout(saveWindowPos, 500); });
 let isClosing = false;
 win.onCloseRequested(async (event) => {

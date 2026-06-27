@@ -74,17 +74,61 @@ export function applySticky() {
   });
 }
 
-// ===== 企業名列の自動幅 =====
+// ===== 列の自動幅（シグナル列以外） =====
 export let _nameAutoSizeRaf = null;
+let _measureCanvas = null;
+function measureTextWidth(text, font) {
+  if (!text) return 0;
+  if (!_measureCanvas) _measureCanvas = document.createElement("canvas");
+  const ctx = _measureCanvas.getContext("2d");
+  ctx.font = font;
+  return ctx.measureText(text).width;
+}
 
-export function autoSizeNameColumn(tableHeader, stockList, saveColWidths, visibleColsFn, applyStickyFn) {
-  const cells = [...stockList.querySelectorAll(".stock-row .cell-name")];
-  if (cells.length === 0) return;
-  let maxW = 80;
-  cells.forEach(c => { if (c.scrollWidth > maxW) maxW = c.scrollWidth; });
-  const newW = Math.min(maxW + 10, 320);
-  if (state.colWidths["name"] === newW) return;
-  state.colWidths["name"] = newW;
+const AUTOSIZE_SKIP = new Set(["reorder", "del", "signals"]);
+const AUTOSIZE_MAX = { name: 320 };
+
+function measureCellWidth(cell, rowKeys) {
+  if (!rowKeys) {
+    const ja = cell.querySelector(".ja");
+    const target = ja || cell;
+    return measureTextWidth(target.textContent, getComputedStyle(target).font);
+  }
+  // 3行モードのグループセル: signals以外の子要素のうち最大幅を採用
+  let maxW = 0;
+  const children = [...cell.querySelectorAll(".g3-cell > *")];
+  children.forEach((child, i) => {
+    if (rowKeys[i] === "signals") return;
+    const ja = child.querySelector(".ja");
+    const target = ja || child;
+    const w = measureTextWidth(target.textContent, getComputedStyle(target).font);
+    if (w > maxW) maxW = w;
+  });
+  return maxW;
+}
+
+export function autoSizeColumns(tableHeader, stockList, saveColWidths, visibleColsFn, applyStickyFn) {
+  const cols = visibleColsFn();
+  const rows = [...stockList.querySelectorAll(".stock-row")];
+  if (rows.length === 0) return;
+  let changed = false;
+
+  cols.forEach((col, idx) => {
+    if (AUTOSIZE_SKIP.has(col.k)) return;
+    if (col.rows && col.rows.includes("signals")) return;
+    let maxW = 40;
+    rows.forEach(r => {
+      const cell = r.children[idx];
+      if (!cell) return;
+      const w = measureCellWidth(cell, col.rows);
+      if (w > maxW) maxW = w;
+    });
+    const cap = AUTOSIZE_MAX[col.k] ?? 400;
+    const newW = Math.min(Math.ceil(maxW) + 28, cap);
+    if (state.colWidths[col.k] !== newW) { state.colWidths[col.k] = newW; changed = true; }
+  });
+
+  if (!changed) return;
   saveColWidths();
   const tpl = visibleColsFn().map(c => c.w).join(" ");
   tableHeader.style.gridTemplateColumns = tpl;
@@ -92,10 +136,10 @@ export function autoSizeNameColumn(tableHeader, stockList, saveColWidths, visibl
   applyStickyFn();
 }
 
-export function scheduleNameAutoSize(tableHeader, stockList, saveColWidths, visibleColsFn, applyStickyFn) {
+export function scheduleColumnsAutoSize(tableHeader, stockList, saveColWidths, visibleColsFn, applyStickyFn) {
   if (_nameAutoSizeRaf) cancelAnimationFrame(_nameAutoSizeRaf);
   _nameAutoSizeRaf = requestAnimationFrame(() => {
     _nameAutoSizeRaf = null;
-    autoSizeNameColumn(tableHeader, stockList, saveColWidths, visibleColsFn, applyStickyFn);
+    autoSizeColumns(tableHeader, stockList, saveColWidths, visibleColsFn, applyStickyFn);
   });
 }

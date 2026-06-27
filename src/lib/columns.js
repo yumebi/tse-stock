@@ -23,7 +23,7 @@ export function visibleCols() {
 export function visibleCols3() {
   return [
     { k: "reorder", w: "36px", label: "" },
-    ...COL_GROUPS_3ROW,
+    ...COL_GROUPS_3ROW.map(c => state.colWidths[c.k] ? { ...c, w: state.colWidths[c.k] + "px" } : c),
     { k: "del", w: "28px", label: "" },
   ];
 }

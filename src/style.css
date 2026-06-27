@@ -389,7 +389,6 @@ body.density-large .cell-name .ja { font-size: 1em; }
 .pinned-cell { background: var(--bg-primary) !important; }
 .table-header .pinned-cell { background: var(--bg-secondary) !important; z-index: 15 !important; }
 .stock-row:hover .pinned-cell { background: var(--bg-tertiary) !important; }
-.pinned-last { border-right: 1px solid var(--border-color) !important; }
 
 /* ===== 52週高値/安値乖離 ===== */
 .cell-w52 { font-size: 0.82em; font-weight: 600; }
