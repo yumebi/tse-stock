@@ -6,15 +6,34 @@ import { applySticky } from "./sticky.js";
 
 let _tableHeader = null;
 let _stockList = null;
+let _portfolioTotalEl = null;
 
 // 外部API/スクレイピング由来の文字列（企業名等）をHTMLに埋め込む前にエスケープ
 export function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-export function initRender(tableHeader, stockList) {
+export function initRender(tableHeader, stockList, portfolioTotalEl) {
   _tableHeader = tableHeader;
   _stockList = stockList;
+  _portfolioTotalEl = portfolioTotalEl || null;
+}
+
+function updatePortfolioTotal(stks) {
+  if (!_portfolioTotalEl) return;
+  let totalPnl = 0, totalCost = 0, count = 0;
+  for (const s of stks) {
+    const pf = state.portfolio[s.code];
+    if (!pf || !pf.cost || !pf.qty || !s.price) continue;
+    totalPnl += (s.price - pf.cost) * pf.qty;
+    totalCost += pf.cost * pf.qty;
+    count++;
+  }
+  if (count === 0) { _portfolioTotalEl.textContent = ""; _portfolioTotalEl.className = "portfolio-total"; return; }
+  const pct = totalCost !== 0 ? (totalPnl / totalCost) * 100 : 0;
+  const cls = totalPnl >= 0 ? "up" : "down";
+  _portfolioTotalEl.className = `portfolio-total ${cls}`;
+  _portfolioTotalEl.textContent = `損益合計 ${totalPnl >= 0 ? "+" : ""}¥${Math.round(totalPnl).toLocaleString()} (${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%)`;
 }
 
 const _rowHashes = new Map();
@@ -140,6 +159,7 @@ export function renderCell(s, k, fl, rowOpts = {}) {
       const pnlPct = ((s.price - pf.cost) / pf.cost) * 100;
       const cls = pnl >= 0 ? "up" : "down";
       return `<span class="cell-pnl has-pf ${cls}" data-code="${s.code}">
+        <span class="pnl-cost">取得 ¥${fmt(pf.cost)}</span>
         <span class="pnl-amount">${pnl >= 0 ? "+" : ""}¥${Math.round(pnl).toLocaleString()}</span>
         <span class="pnl-pct">${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%</span>
       </span>`;
@@ -195,6 +215,7 @@ export function render() {
       : `<div class="empty-state">銘柄がありません。上の入力欄からコードを追加してください。</div>`;
     _tableHeader.style.gridTemplateColumns = "";
     _rowHashes.clear(); _layoutKey = "";
+    updatePortfolioTotal([]);
     return;
   }
 
@@ -311,4 +332,5 @@ export function render() {
   if (state.signalFilter !== "all" && _setStatus) {
     _setStatus(`フィルタ中: ${sorted.length}/${stks.length}件`, false);
   }
+  updatePortfolioTotal(stks);
 }

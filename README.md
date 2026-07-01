@@ -2,7 +2,7 @@
 
 Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリングアプリです（約15分ディレイ）。
 
-![version](https://img.shields.io/badge/version-1.1.9-brightgreen) ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
+![version](https://img.shields.io/github/v/release/yumebi/tse-stock?label=version&color=brightgreen) ![dark-theme](https://img.shields.io/badge/theme-dark-0d1117) ![rust](https://img.shields.io/badge/rust-1.95-orange) ![tauri](https://img.shields.io/badge/tauri-v2-blue)
 
 ## 主な機能
 
@@ -13,7 +13,7 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 - 更新間隔を選択可能（15秒 / 30秒 / 1分 / 2分 / 5分）
 - ⏸ ボタンで自動更新を一時停止・再開
 - 🔄 ボタンで手動即時更新
-- ウィンドウタイトルにアプリバージョンを表示（例: `YMB TSE Stock v1.1.9 - 東証株価`）
+- ウィンドウタイトルにアプリバージョンを表示（例: `YMB TSE Stock vX.X.X - 東証株価`）
 - 起動時に最新バージョンをチェックし、更新があればステータスバーに通知
 - 東証の取引時間を設定可能（昼休み・24時間取引モードにも対応、⏰ ボタン）
 

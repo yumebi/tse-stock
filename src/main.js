@@ -42,6 +42,7 @@ const idxN225        = document.getElementById("idx-n225");
 const idxN225F       = document.getElementById("idx-n225f");
 const idxUsdJpy      = document.getElementById("idx-usdjpy");
 const marketStatus   = document.getElementById("market-status");
+const portfolioTotalEl = document.getElementById("portfolio-total");
 const densityBtn     = document.getElementById("density-btn");
 const rowModeBtn     = document.getElementById("row-mode-btn");
 const pinBtn         = document.getElementById("pin-btn");
@@ -462,19 +463,36 @@ function openPortfolioPanel(code, anchorEl) {
     const pnl = (curPrice - pf.cost) * pf.qty;
     const pnlPct = ((curPrice - pf.cost) / pf.cost) * 100;
     const cls = pnl >= 0 ? "up" : "down";
+    let dividendHtml = "";
+    if (s?.dividendYield) {
+      const annualDividend = pf.cost * pf.qty * (s.dividendYield / 100);
+      const totalReturn = pnl + annualDividend;
+      const totalReturnPct = ((totalReturn) / (pf.cost * pf.qty)) * 100;
+      dividendHtml = `
+      <div>年間配当予想: <b>¥${Math.round(annualDividend).toLocaleString()}</b>（利回り${s.dividendYield.toFixed(2)}%）</div>
+      <div>配当込みリターン: <span class="pf-${totalReturn >= 0 ? "up" : "down"}">${totalReturn >= 0 ? "+" : ""}¥${Math.round(totalReturn).toLocaleString()} (${totalReturnPct >= 0 ? "+" : ""}${totalReturnPct.toFixed(2)}%)</span></div>`;
+    }
     previewHtml = `<div class="pf-preview">
       <div>評価額: <b>¥${(curPrice * pf.qty).toLocaleString()}</b></div>
       <div>含み損益: <span class="pf-${cls}">${pnl >= 0 ? "+" : ""}¥${Math.round(pnl).toLocaleString()} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)</span></div>
+      ${dividendHtml}
     </div>`;
   }
   portfolioPanel.innerHTML = `
     <div class="pf-panel-title">💼 ポートフォリオ <span class="pf-code">${code}</span></div>
-    <label>取得単価（円）<input type="number" id="pf-cost" placeholder="例: 2500" value="${pf.cost ?? ""}" min="0" step="1"></label>
-    <label>保有株数<input type="number" id="pf-qty" placeholder="例: 100" value="${pf.qty ?? ""}" min="0" step="100"></label>
+    <label>取得単価（平均、円）<input type="number" id="pf-cost" placeholder="例: 2500" value="${pf.cost ?? ""}" min="0" step="1"></label>
+    <label>保有株数（合計）<input type="number" id="pf-qty" placeholder="例: 100" value="${pf.qty ?? ""}" min="0" step="100"></label>
     ${previewHtml}
     <div class="pf-panel-btns">
       <button id="pf-save-btn">保存</button>
       <button id="pf-clear-btn">クリア</button>
+    </div>
+    <div class="pf-panel-divider"></div>
+    <div class="pf-panel-subtitle">🔁 買い増し（ナンピン平均取得単価を自動計算）</div>
+    <label>追加株数<input type="number" id="pf-add-qty" placeholder="例: 100" min="0" step="100"></label>
+    <label>追加取得単価（円）<input type="number" id="pf-add-cost" placeholder="例: 2300" min="0" step="1"></label>
+    <div class="pf-panel-btns">
+      <button id="pf-add-btn">買い増しを反映</button>
     </div>`;
   const r = anchorEl.getBoundingClientRect();
   portfolioPanel.style.top = (r.bottom + 4) + "px";
@@ -493,6 +511,16 @@ function openPortfolioPanel(code, anchorEl) {
   });
   portfolioPanel.querySelector("#pf-clear-btn").addEventListener("click", () => {
     delete state.portfolio[_portfolioCode];
+    savePortfolio(); portfolioPanel.classList.remove("open"); render();
+  });
+  portfolioPanel.querySelector("#pf-add-btn").addEventListener("click", () => {
+    const addQty = parseInt(portfolioPanel.querySelector("#pf-add-qty").value, 10);
+    const addCost = parseFloat(portfolioPanel.querySelector("#pf-add-cost").value);
+    if (isNaN(addQty) || isNaN(addCost) || addQty <= 0 || addCost <= 0) return;
+    const cur = state.portfolio[_portfolioCode] || { cost: 0, qty: 0 };
+    const newQty = cur.qty + addQty;
+    const newCost = (cur.cost * cur.qty + addCost * addQty) / newQty;
+    state.portfolio[_portfolioCode] = { cost: newCost, qty: newQty };
     savePortfolio(); portfolioPanel.classList.remove("open"); render();
   });
 }
@@ -561,11 +589,14 @@ async function fetchIndices() {
 // ===== CSV =====
 function exportCSV() {
   const arr = stocks(); if (arr.length === 0) return;
-  const headers = ["コード", "企業名", "現在株価", "前日比%", "前日比", "前日終値", "始値", "高値", "安値", "出来高", "MA5", "MA25", "MA75", "MACD", "Sig", "RSI", "判定", "52週高値", "52週安値", "52高乖離%", "52安乖離%"];
+  const headers = ["コード", "企業名", "現在株価", "前日比%", "前日比", "前日終値", "始値", "高値", "安値", "出来高", "MA5", "MA25", "MA75", "MACD", "Sig", "RSI", "判定", "52週高値", "52週安値", "52高乖離%", "52安乖離%", "取得単価", "保有株数", "評価損益", "評価損益%"];
   const rows = arr.map(s => {
     const w52hDev = s.week52High ? ((s.price / s.week52High - 1) * 100).toFixed(1) : "";
     const w52lDev = s.week52Low  ? ((s.price / s.week52Low  - 1) * 100).toFixed(1) : "";
-    return [s.code, s.nameJa || s.name, s.price, s.changePercent?.toFixed(2), s.change, s.prevClose, s.open, s.high, s.low, s.volume, s.ma5?.toFixed(2), s.ma25?.toFixed(2), s.ma75?.toFixed(2), s.macd?.toFixed(4), s.macdSignal?.toFixed(4), s.rsi?.toFixed(1), scoreText(s.signals), s.week52High, s.week52Low, w52hDev, w52lDev];
+    const pf = state.portfolio[s.code];
+    const pnl = pf?.cost && pf?.qty && s.price ? (s.price - pf.cost) * pf.qty : null;
+    const pnlPct = pf?.cost && pf?.qty && s.price ? ((s.price - pf.cost) / pf.cost) * 100 : null;
+    return [s.code, s.nameJa || s.name, s.price, s.changePercent?.toFixed(2), s.change, s.prevClose, s.open, s.high, s.low, s.volume, s.ma5?.toFixed(2), s.ma25?.toFixed(2), s.ma75?.toFixed(2), s.macd?.toFixed(4), s.macdSignal?.toFixed(4), s.rsi?.toFixed(1), scoreText(s.signals), s.week52High, s.week52Low, w52hDev, w52lDev, pf?.cost, pf?.qty, pnl != null ? Math.round(pnl) : "", pnlPct != null ? pnlPct.toFixed(2) : ""];
   });
   const csv = [headers, ...rows].map(r => r.map(c => `"${(c ?? "").toString().replace(/"/g, '""')}"`).join(",")).join("\n");
   const filename = `tse-stock-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -904,7 +935,10 @@ stockList.addEventListener("click", e => {
     const i = arr.findIndex(s => s.code === dnB.dataset.code);
     if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; setStocks(arr); saveAll(); render(); }
   } else if (delB) {
-    removeStock(delB.dataset.code);
+    const code = delB.dataset.code;
+    const s = arr.find(x => x.code === code);
+    const label = s ? `${code}（${s.nameJa || s.name}）` : code;
+    if (confirm(`${label} をリストから削除しますか？`)) removeStock(code);
   } else if (alertEl) {
     e.stopPropagation();
     alertPanel.classList.remove("open"); notePanel.classList.remove("open"); portfolioPanel.classList.remove("open");
@@ -961,7 +995,7 @@ const DEFAULT_STOCKS = ["7203", "8306", "9984"];
 async function init() {
   // モジュールのDOMref初期化
   initSticky(tableHeader, stockList);
-  initRender(tableHeader, stockList);
+  initRender(tableHeader, stockList, portfolioTotalEl);
   initRenderHelpers(setStatus, sortArr);
   initTabs(tabsEl, render, saveAll);
 
