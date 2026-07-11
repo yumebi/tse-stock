@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/main/packages/tauri-utils/schema.json",
   "productName": "YMB TSE Stock",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "identifier": "com.tsestock.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -35,7 +35,8 @@
         "height": 800,
         "resizable": true,
         "fullscreen": false,
-        "visible": false
+        "visible": false,
+        "additionalBrowserArgs": "--disable-gpu --disable-gpu-compositing"
       }
     ],
     "security": {
