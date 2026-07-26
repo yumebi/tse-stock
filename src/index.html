@@ -24,21 +24,25 @@
         <span id="market-status" class="market-status"></span>
         <span id="portfolio-total" class="portfolio-total"></span>
       </div>
+      <!-- 種類ごとに区切る: 銘柄追加 / データ取得 / 表示 / 絞り込み / 入出力と設定 -->
       <div id="add-stock">
         <input type="text" id="stock-code-input" placeholder="銘柄コード or 企業名（例: 7203 / トヨタ）" />
         <button id="add-btn">追加</button>
+
+        <span class="tb-sep"></span>
         <button id="pause-btn" title="自動更新の停止/再開">⏸</button>
-        <button id="refresh-btn" title="今すぐ更新">🔄</button>
-        <select id="interval-sel" title="更新間隔">
+        <!-- 「更新」だけだとアプリ本体の更新と紛らわしいため、株価データの再取得だと分かる語にする -->
+        <button id="refresh-btn" title="株価データを再取得">🔄</button>
+        <select id="interval-sel" title="再取得の間隔">
           <option value="15">15秒</option>
           <option value="30">30秒</option>
           <option value="60">1分</option>
           <option value="120">2分</option>
           <option value="300">5分</option>
         </select>
+
+        <span class="tb-sep"></span>
         <button id="col-panel-btn" title="列の表示/非表示">☰</button>
-        <button id="import-btn" title="銘柄を一括インポート">📋</button>
-        <button id="export-btn" title="CSVエクスポート">📥</button>
         <button id="density-btn" title="行の高さ切替">標準</button>
         <button id="row-mode-btn" title="1行表示/3行表示切替">1行</button>
         <select id="spark-sel" title="チャート期間">
@@ -50,16 +54,24 @@
           <option value="1y">1年</option>
         </select>
         <button id="pin-btn" title="コード・企業名列を固定">📌</button>
+
+        <span class="tb-sep"></span>
         <span class="filter-group">
           <button class="filter-btn active" data-filter="all" title="全銘柄表示">全</button>
           <button class="filter-btn" data-filter="buy" title="買いシグナル優勢のみ">🟢</button>
           <button class="filter-btn" data-filter="sell" title="売りシグナル優勢のみ">🔴</button>
         </span>
         <button id="sig-cat-btn" title="表示シグナルの種類を選択">📶</button>
+
+        <span class="tb-sep"></span>
+        <button id="import-btn" title="銘柄を一括インポート">📋</button>
+        <button id="export-btn" title="CSVエクスポート">📥</button>
         <button id="market-session-btn" title="取引時間設定">⏰</button>
         <button id="theme-btn" title="テーマ・フォント設定">🎨</button>
       </div>
       <div id="status-msg"></div>
+      <!-- 他のYMBアプリと同じく、専用ダイアログを開かせずガワに常時表示する -->
+      <div id="app-version"></div>
     </div>
     <div id="stock-table">
       <div class="table-header">

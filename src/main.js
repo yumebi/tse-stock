@@ -51,7 +51,18 @@ const sparkSel       = document.getElementById("spark-sel");
 // ===== ヘルパー =====
 function setStatus(m, e) { statusMsg.textContent = m; statusMsg.style.color = e ? "#f85149" : "#8b949e"; }
 
-// ===== バージョンチェック =====
+// ===== バージョン =====
+// 他のYMBアプリと同じく、専用ダイアログを持たずヘッダーに常時表示する
+async function showAppVersion() {
+  const el = document.getElementById("app-version");
+  if (!el) return;
+  try {
+    el.textContent = `v${await getVersion()}`;
+  } catch (_) {
+    // 取れなくても動作には影響しないので空のままにする
+  }
+}
+
 async function checkForUpdate() {
   try {
     const res = await fetch("https://raw.githubusercontent.com/yumebi/tse-stock/master/version.json");
@@ -1000,6 +1011,7 @@ async function init() {
   initTabs(tabsEl, render, saveAll);
 
   try { await restoreWindow(); } finally { win.show(); }
+  showAppVersion();
   checkForUpdate();
   applyTheme(state.theme);
   applyFont(state.font);
