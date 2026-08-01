@@ -17,4 +17,4 @@ serde_json = "1"
 reqwest = { version = "0.13", features = ["json", "rustls"], default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", features = ["rt", "macros"] }
-calamine = "0.36"
+calamine = "0.36.1"
