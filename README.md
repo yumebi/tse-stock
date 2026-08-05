@@ -122,7 +122,7 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 
 ### 必要条件
 - [Rust](https://rustup.rs/) 1.70+
-- [Node.js](https://nodejs.org/) 18+
+- [Node.js](https://nodejs.org/) 20.19+（Vite 8 の要件）
 - Windows: [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)（通常はOSに組み込み済み）
 
 ### ソースからビルド
