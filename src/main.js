@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, availableMonitors, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
+import { fitBounds, normalizeSaved } from "./lib/windowBounds.js";
 import { getVersion } from "@tauri-apps/api/app";
 
 import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS, SIG_CATEGORIES, MARKET_SESSION_DEFAULT } from "./lib/constants.js";
@@ -78,27 +79,50 @@ async function checkForUpdate() {
 // ===== ウィンドウ =====
 const win = getCurrentWindow();
 const WIN_KEY = "tse-stock-window";
+// tauri.conf.json の minWidth / minHeight(論理ピクセル)と合わせる。
+const WIN_MIN = { width: 640, height: 400 };
+
+function readSavedWindow() {
+  try { return JSON.parse(localStorage.getItem(WIN_KEY) || "null"); } catch (_) { return null; }
+}
+
+// 位置は外形(outerPosition)、大きさは内側(innerSize)で保存・復元する。
+// 外形の大きさを保存して setSize(内側サイズを指定する)で戻すと、起動のたびに枠の分だけ大きくなる。
 async function restoreWindow() {
   try {
-    const r = localStorage.getItem(WIN_KEY);
-    if (!r) return;
-    let { x, y, w, h } = JSON.parse(r);
-    if (x != null && y != null) {
-      const monitors = await availableMonitors().catch(() => []);
-      const fits = monitors.some(m =>
-        x >= m.position.x && x < m.position.x + m.size.width &&
-        y >= m.position.y && y < m.position.y + m.size.height
-      );
-      if (!fits && monitors.length > 0) { x = monitors[0].position.x + 40; y = monitors[0].position.y + 40; }
-      await win.setPosition(new PhysicalPosition(x, y));
-    }
-    if (w && h) await win.setSize(new PhysicalSize(w, h));
+    const [outer, inner] = await Promise.all([win.outerSize(), win.innerSize()]);
+    const frame = { width: outer.width - inner.width, height: outer.height - inner.height };
+    const saved = normalizeSaved(readSavedWindow(), frame);
+    if (!saved) return;
+
+    const monitors = await availableMonitors().catch(() => []);
+    const workAreas = monitors.map(m => {
+      const a = m.workArea ?? m;
+      return { x: a.position.x, y: a.position.y, width: a.size.width, height: a.size.height };
+    });
+    const scale = await win.scaleFactor();
+    const fitted = fitBounds(
+      { x: saved.x, y: saved.y, width: saved.iw + frame.width, height: saved.ih + frame.height },
+      workAreas,
+      { minWidth: Math.round(WIN_MIN.width * scale), minHeight: Math.round(WIN_MIN.height * scale) },
+    );
+    await win.setSize(new PhysicalSize(fitted.width - frame.width, fitted.height - frame.height));
+    await win.setPosition(new PhysicalPosition(fitted.x, fitted.y));
+    if (saved.max) await win.maximize();
   } catch (_) {}
 }
 async function saveWindowPos() {
   try {
-    const [p, s] = await Promise.all([win.outerPosition(), win.outerSize()]);
-    localStorage.setItem(WIN_KEY, JSON.stringify({ x: p.x, y: p.y, w: s.width, h: s.height }));
+    // 最小化中の座標は画面外(-32000)になるので保存しない。
+    if (await win.isMinimized()) return;
+    // 最大化中は、元の大きさを残したまま最大化の印だけ付ける。
+    if (await win.isMaximized()) {
+      const prev = readSavedWindow();
+      if (prev) localStorage.setItem(WIN_KEY, JSON.stringify({ ...prev, max: true }));
+      return;
+    }
+    const [p, s] = await Promise.all([win.outerPosition(), win.innerSize()]);
+    localStorage.setItem(WIN_KEY, JSON.stringify({ x: p.x, y: p.y, iw: s.width, ih: s.height, max: false }));
   } catch (_) {}
 }
 

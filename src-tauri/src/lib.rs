@@ -1,6 +1,7 @@
 mod stock;
 
 use stock::{fetch_index, fetch_news_for_code, fetch_stock, update_jpx_cache_if_needed};
+use tauri::Manager;
 
 #[tauri::command]
 async fn fetch_stock_cmd(
@@ -26,6 +27,19 @@ async fn fetch_news_cmd(code: String) -> Result<Vec<stock::NewsItem>, String> {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            // ウインドウは位置を復元してから表示するため visible:false で作る。
+            // フロントエンドの初期化が途中で失敗して show() に届かなくても、ウインドウが
+            // 出ないままプロセスだけが残らないように、一定時間後に表示されていなければ表示する。
+            let window_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(5));
+                if let Some(window) = window_handle.get_webview_window("main") {
+                    if !window.is_visible().unwrap_or(true) {
+                        let _ = window.show();
+                    }
+                }
+            });
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 update_jpx_cache_if_needed(&handle).await;
