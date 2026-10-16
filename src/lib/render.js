@@ -97,7 +97,7 @@ export function renderCell(s, k, fl, rowOpts = {}) {
     case "price": {
       const dirCls = state.priceDirs[s.code] ? ` dir-${state.priceDirs[s.code]}` : "";
       const al = state.alerts[s.code];
-      const alActive = al && (al.hi != null || al.lo != null) ? " alert-active" : "";
+      const alActive = al && (al.hi != null || al.lo != null || al.pct != null) ? " alert-active" : "";
       return `<span class="cell-price ${fl}${dirCls}${alActive}">¥${fmt(s.price)}</span>`;
     }
     case "spark": return `<span class="cell-spark">${sparkline(getSparkData(s))}</span>`;
@@ -169,6 +169,7 @@ export function renderCell(s, k, fl, rowOpts = {}) {
       const parts = [];
       if (al.hi != null) parts.push(`<span class="al-hi">↑${al.hi.toLocaleString()}</span>`);
       if (al.lo != null) parts.push(`<span class="al-lo">↓${al.lo.toLocaleString()}</span>`);
+      if (al.pct != null) parts.push(`<span class="al-pct">±${al.pct}%</span>`);
       return `<span class="cell-alert${parts.length ? " has-alert" : ""}" data-code="${s.code}">${parts.length ? parts.join("") : '<span class="al-empty">🔔</span>'}</span>`;
     }
     case "note": {
@@ -201,7 +202,7 @@ function computeRowHash(s, fl, isFirst, isLast) {
     s.ma5, s.ma25, s.ma75, s.macd, s.macdSignal, s.rsi,
     s.week52High, s.week52Low, s.signals?.join("|"),
     state.priceDirs[s.code], fl,
-    pf?.cost, pf?.qty, al?.hi, al?.lo, state.notes[s.code], state.rowColors[s.code],
+    pf?.cost, pf?.qty, al?.hi, al?.lo, al?.pct, state.notes[s.code], state.rowColors[s.code],
     isFirst, isLast,
   ].join("|");
 }

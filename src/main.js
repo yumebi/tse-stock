@@ -7,12 +7,13 @@ import { getVersion } from "@tauri-apps/api/app";
 import { ALL_COLS, TOGGLE_LABELS, SORT_KEYS, DENSITY_LABELS, DENSITY_NEXT, SPARK_LABELS, SIG_CATEGORIES, MARKET_SESSION_DEFAULT } from "./lib/constants.js";
 import {
   state, priceFlash,
-  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveNotes, savePortfolio, saveSigCats, saveMarketSession, saveRowColors, saveTheme, saveFont, saveFontBold, saveRowMode,
+  saveAll, loadAll, saveColState, saveColWidths, saveAlerts, saveAlertFired, saveNotes, savePortfolio, saveSigCats, saveMarketSession, saveRowColors, saveTheme, saveFont, saveFontBold, saveRowMode,
   getNameCache, saveNameCache,
   stocks, setStocks,
   hash, detectSignalChange,
 } from "./lib/state.js";
 import { signalBeep, alertBeep, initNotifications, sendOsNotification } from "./lib/audio.js";
+import { evaluateAlert, alertMessage, dayKey } from "./lib/alerts.js";
 import { scoreSignals, scoreText } from "./lib/indicators.js";
 import { visibleCols, visibleCols3, getGroupOrder, moveGroup } from "./lib/columns.js";
 import { initSticky, applySticky, scheduleColumnsAutoSize } from "./lib/sticky.js";
@@ -399,6 +400,7 @@ function openAlertPanel(code, anchorEl) {
     <div class="alert-panel-title">🔔 アラート設定 <span class="alert-code">${code}</span></div>
     <label>上値アラート<input type="number" id="alert-hi" placeholder="設定なし" value="${al.hi ?? ""}" min="0" step="1"></label>
     <label>下値アラート<input type="number" id="alert-lo" placeholder="設定なし" value="${al.lo ?? ""}" min="0" step="1"></label>
+    <label>前日比アラート(±%、1日1回)<input type="number" id="alert-pct" placeholder="設定なし" value="${al.pct ?? ""}" min="0" step="0.1"></label>
     <div class="alert-panel-btns">
       <button id="alert-save-btn">保存</button>
       <button id="alert-clear-btn">クリア</button>
@@ -410,11 +412,15 @@ function openAlertPanel(code, anchorEl) {
   alertPanel.querySelector("#alert-save-btn").addEventListener("click", () => {
     const hi = parseFloat(alertPanel.querySelector("#alert-hi").value);
     const lo = parseFloat(alertPanel.querySelector("#alert-lo").value);
-    state.alerts[_alertCode] = { hi: isNaN(hi) ? null : hi, lo: isNaN(lo) ? null : lo };
+    const pct = parseFloat(alertPanel.querySelector("#alert-pct").value);
+    state.alerts[_alertCode] = { hi: isNaN(hi) ? null : hi, lo: isNaN(lo) ? null : lo, pct: isNaN(pct) || pct <= 0 ? null : pct };
+    // しきい値を変えたら、前日比アラートをまた通知できる状態に戻す
+    delete state.alertFired[_alertCode]; saveAlertFired();
     saveAlerts(); alertPanel.classList.remove("open"); render();
   });
   alertPanel.querySelector("#alert-clear-btn").addEventListener("click", () => {
     delete state.alerts[_alertCode];
+    delete state.alertFired[_alertCode]; saveAlertFired();
     saveAlerts(); alertPanel.classList.remove("open"); render();
   });
 }
@@ -772,18 +778,14 @@ async function fetchAll() {
       const ch = detectSignalChange(s.code, data.signals);
       if (ch === "buy") sigBuy = true; else if (ch === "sell") sigSell = true;
       const al = state.alerts[s.code];
-      if (al && op != null) {
-        if (al.hi != null && op < al.hi && data.price >= al.hi) {
-          alertBeep(true);
-          const msg = `🔔 ${s.code} 上値アラート ¥${al.hi.toLocaleString()} 到達`;
-          setStatus(msg, false);
-          sendOsNotification(`TSE Stock: ${s.code} 上値アラート`, `現在価格 ¥${data.price.toLocaleString()} が ¥${al.hi.toLocaleString()} に到達`);
-        }
-        if (al.lo != null && op > al.lo && data.price <= al.lo) {
-          alertBeep(false);
-          const msg = `🔔 ${s.code} 下値アラート ¥${al.lo.toLocaleString()} 到達`;
-          setStatus(msg, false);
-          sendOsNotification(`TSE Stock: ${s.code} 下値アラート`, `現在価格 ¥${data.price.toLocaleString()} が ¥${al.lo.toLocaleString()} に到達`);
+      if (al) {
+        const { events, fired } = evaluateAlert(op, data.price, data.changePercent, al, state.alertFired[s.code], dayKey());
+        if (fired !== state.alertFired[s.code]) { state.alertFired[s.code] = fired; saveAlertFired(); }
+        for (const ev of events) {
+          alertBeep(ev.kind === "hi" || ev.kind === "pctUp");
+          const m = alertMessage(s.code, ev, data.price);
+          setStatus(m.status, false);
+          sendOsNotification(m.title, m.body);
         }
       }
       anyOk = true;

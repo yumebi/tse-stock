@@ -10,6 +10,7 @@ export const state = {
   colWidths: JSON.parse(localStorage.getItem("tse-stock-col-widths") || "{}"),
   interval: parseInt(localStorage.getItem("tse-stock-interval") || "30"),
   alerts: JSON.parse(localStorage.getItem("tse-stock-alerts") || "{}"),
+  alertFired: JSON.parse(localStorage.getItem("tse-stock-alerts-fired") || "{}"),
   rowColors: JSON.parse(localStorage.getItem("tse-stock-row-colors") || "{}"),
   theme: localStorage.getItem("tse-stock-theme") || THEME_DEFAULT,
   font: localStorage.getItem("tse-stock-font") || FONT_DEFAULT,
@@ -46,6 +47,7 @@ export function saveColState() {
 }
 export function saveColWidths()  { localStorage.setItem("tse-stock-col-widths", JSON.stringify(state.colWidths)); }
 export function saveAlerts()     { localStorage.setItem("tse-stock-alerts", JSON.stringify(state.alerts)); }
+export function saveAlertFired() { localStorage.setItem("tse-stock-alerts-fired", JSON.stringify(state.alertFired)); }
 export function saveRowColors()  { localStorage.setItem("tse-stock-row-colors", JSON.stringify(state.rowColors)); }
 export function saveTheme()      { localStorage.setItem("tse-stock-theme", state.theme); }
 export function saveFont()       { localStorage.setItem("tse-stock-font", state.font); }
