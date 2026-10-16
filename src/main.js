@@ -14,6 +14,7 @@ import {
 } from "./lib/state.js";
 import { signalBeep, alertBeep, initNotifications, sendOsNotification } from "./lib/audio.js";
 import { evaluateAlert, alertMessage, dayKey } from "./lib/alerts.js";
+import { fetchLatestRelease, isNewer } from "./lib/updateCheck.js";
 import { scoreSignals, scoreText } from "./lib/indicators.js";
 import { visibleCols, visibleCols3, getGroupOrder, moveGroup } from "./lib/columns.js";
 import { initSticky, applySticky, scheduleColumnsAutoSize } from "./lib/sticky.js";
@@ -55,24 +56,33 @@ function setStatus(m, e) { statusMsg.textContent = m; statusMsg.style.color = e 
 
 // ===== バージョン =====
 // 他のYMBアプリと同じく、専用ダイアログを持たずヘッダーに常時表示する
+let updateNotice = null;   // 新しいバージョンがあれば "1.3.6"
+
 async function showAppVersion() {
   const el = document.getElementById("app-version");
   if (!el) return;
   try {
-    el.textContent = `v${await getVersion()}`;
+    const v = await getVersion();
+    // 新しいバージョンの案内は、ステータス行だと次の進捗表示で上書きされてすぐ消えるので、
+    // バージョン表示の横に残す。
+    el.textContent = updateNotice ? `v${v} → 新版 v${updateNotice}` : `v${v}`;
+    el.classList.toggle("update-available", !!updateNotice);
+    el.title = updateNotice ? "GitHub Releases から入手できます" : "";
   } catch (_) {
     // 取れなくても動作には影響しないので空のままにする
   }
 }
 
+// 公開済みのリリースを見て、数値で新しい場合だけ案内する(失敗は黙って無視)。
 async function checkForUpdate() {
   try {
-    const res = await fetch("https://raw.githubusercontent.com/yumebi/tse-stock/master/version.json");
-    if (!res.ok) return;
-    const { version: latest } = await res.json();
+    const release = await fetchLatestRelease();
+    if (!release) return;
     const current = await getVersion();
-    if (latest && latest !== current) {
-      setStatus(`新バージョン v${latest} が利用可能です（現在: v${current}） — GitHub Releasesから入手できます`, false);
+    if (isNewer(release.version, current)) {
+      updateNotice = release.version;
+      showAppVersion();
+      setStatus(`新バージョン v${release.version} が利用可能です（現在: v${current}） — GitHub Releasesから入手できます`, false);
     }
   } catch (_) {}
 }
