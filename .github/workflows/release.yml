@@ -27,7 +27,7 @@ jobs:
       version: ${{ steps.bump.outputs.version }}
       tag: ${{ steps.bump.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: master
@@ -89,7 +89,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # determine-version が打ったタグを取りに行く。
           # master を見るとバージョンを上げる前の内容でビルドしてしまう。
