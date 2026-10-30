@@ -122,7 +122,7 @@ Tauri v2 + Rust で構築された、東京証券取引所の株価モニタリ�
 ## 開発環境のセットアップ
 
 ### 必要条件
-- [Rust](https://rustup.rs/) 1.70+
+- [Rust](https://rustup.rs/)(stable。最新を推奨)
 - [Node.js](https://nodejs.org/) 20.19+（Vite 8 の要件）
 - Windows: [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)（通常はOSに組み込み済み）
 
@@ -145,12 +145,12 @@ npm run tauri dev
 
 | 層 | 技術 |
 |---|---|
-| フレームワーク | [Tauri v2](https://v2.tauri.app/) |
-| バックエンド | Rust (reqwest, serde, chrono, tokio) |
+| フレームワーク | [Tauri v2](https://v2.tauri.app/)(2.12 系) |
+| バックエンド | Rust (reqwest 0.13 + rustls, serde, chrono, tokio, calamine) |
 | フロントエンド | Vanilla JS (ES Modules) + CSS Grid |
 | チャート描画 | [lightweight-charts](https://github.com/tradingview/lightweight-charts) |
-| バンドラ | Vite |
-| CI/CD | GitHub Actions（タグpushで自動ビルド・Release公開） |
+| バンドラ | Vite 8 |
+| CI/CD | GitHub Actions（masterへのpushで自動ビルド・Release公開）、脆弱性検査は OSV-Scanner |
 
 ## プロジェクト構成
 
@@ -199,6 +199,14 @@ tse-stock/
 
 ### ES モジュール分割
 フロントエンドを11個のモジュールに分割し、循環依存なしで管理。
+
+## セキュリティと依存関係の更新
+
+- **脆弱性の検査**: 依存ライブラリの既知の脆弱性を、[OSV-Scanner](https://google.github.io/osv-scanner/) で、push・プルリクエスト・毎週月曜(10:00 JST)に自動で検査します(`.github/workflows/osv-scanner.yml`)。見つかるとこのワークフローが失敗します(リリースのワークフローとは独立で、リリースは止めません)。
+- **更新の提案**: [Dependabot](https://docs.github.com/ja/code-security/dependabot) が、毎週月曜に依存の更新をプルリクエストで提案します(`.github/dependabot.yml`)。公開から 14 日未満のバージョンは対象にしません(供給網攻撃への備え)。
+- **npm の追加の備え**: `.npmrc` の `min-release-age=14` で、npm も公開から 14 日未満のバージョンを解決しません。
+- **緊急の修正**: 実際に影響のある脆弱性の修正など、緊急性が高いものは、14 日未満でもすぐに取り込みます。
+- **失敗が残る場合**: 修正版がない、または上流(Tauri(glib など)や、xlsx を読む calamine(zip))の更新待ちの検出は、検査が失敗のまま残ることがあります。
 
 ## ダウンロード
 
