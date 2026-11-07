@@ -16,11 +16,12 @@ import { signalBeep, alertBeep, initNotifications, sendOsNotification } from "./
 import { evaluateAlert, alertMessage, dayKey } from "./lib/alerts.js";
 import { fetchLatestRelease, isNewer } from "./lib/updateCheck.js";
 import { scoreSignals, scoreText } from "./lib/indicators.js";
-import { visibleCols, visibleCols3, getGroupOrder, moveGroup } from "./lib/columns.js";
+import { visibleCols, visibleCols3, getGroupOrder, moveGroup, reorderGroups } from "./lib/columns.js";
+import { enableDragReorder } from "./lib/dragReorder.js";
 import { initSticky, applySticky, scheduleColumnsAutoSize } from "./lib/sticky.js";
 const currentVisibleCols = () => state.rowMode === "3row" ? visibleCols3() : visibleCols();
 import { initTabs, renderTabs, addTab, deleteTab } from "./lib/tabs.js";
-import { initRender, initRenderHelpers, render, renderCell, updateSigScroll, escapeHtml } from "./lib/render.js";
+import { initRender, initRenderHelpers, render, renderCell, updateSigScroll, escapeHtml, setDragging } from "./lib/render.js";
 import { THEMES, applyTheme } from "./lib/themes.js";
 import { FONTS, applyFont, applyFontBold } from "./lib/fonts.js";
 import { COMPANY_NAMES_JA } from "./lib/companyNames.js";
@@ -203,7 +204,8 @@ function renderColPanel() {
   const labelMap = new Map(TOGGLE_LABELS);
   colPanel.innerHTML = groupOrder.map((key, i) => {
     const isFirst = i === 0, isLast = i === groupOrder.length - 1;
-    return `<div class="col-toggle-item">
+    return `<div class="col-toggle-item" data-key="${key}">
+      <span class="col-grip" title="ドラッグして並べ替え" aria-hidden="true">⋮⋮</span>
       <input type="checkbox" data-toggle="${key}"${state.hiddenToggles.has(key) ? "" : " checked"}>
       <span class="col-toggle-label">${labelMap.get(key) || key}</span>
       <span class="col-toggle-arrows">
@@ -226,6 +228,15 @@ function renderColPanel() {
     });
   });
 }
+
+// 列の並べ替え(ドラッグ)。▲▼ のボタンも、そのまま使える
+enableDragReorder({
+  container: colPanel,
+  itemSelector: ".col-toggle-item",
+  handleSelector: ".col-grip",
+  getId: (item) => item.dataset.key,
+  onDrop: (keys) => reorderGroups(keys, saveColState, render, renderColPanel),
+});
 
 colPanelBtn.addEventListener("click", e => {
   e.stopPropagation();
@@ -970,6 +981,24 @@ document.addEventListener("keydown", e => {
 });
 
 // ===== イベント =====
+// 銘柄の並べ替え(ドラッグ)。▲▼ のボタンも、そのまま使える
+enableDragReorder({
+  container: stockList,
+  itemSelector: ".stock-row",
+  handleSelector: ".reorder-grip",
+  getId: (row) => row.dataset.code,
+  canStart: () => !state.sortKey && state.signalFilter === "all",
+  onStart: () => setDragging(true),
+  onEnd: () => { setDragging(false); render(); },
+  onDrop: (codes) => {
+    const arr = stocks();
+    const byCode = new Map(arr.map((s) => [s.code, s]));
+    if (codes.length !== arr.length || codes.some((c) => !byCode.has(c))) return;
+    setStocks(codes.map((c) => byCode.get(c)));
+    saveAll();
+  },
+});
+
 stockList.addEventListener("click", e => {
   const upB = e.target.closest(".reorder-btn.up"), dnB = e.target.closest(".reorder-btn.down");
   const delB = e.target.closest(".del-btn");

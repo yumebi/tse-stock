@@ -194,7 +194,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP
 .stock-row span { text-align: right; }
 .stock-row .cell-code, .stock-row .cell-name { text-align: left; }
 
-.cell-reorder { display: flex; flex-direction: column; gap: 0; align-items: center; overflow: hidden; }
+.cell-reorder { display: flex; flex-direction: row; gap: 2px; align-items: center; overflow: hidden; }
+.reorder-arrows { display: flex; flex-direction: column; align-items: center; }
+.reorder-grip, .col-grip { cursor: grab; color: var(--text-muted); user-select: none; touch-action: none; flex-shrink: 0; line-height: 1; }
+.reorder-grip { font-size: 0.9em; padding: 4px 1px; }
+.col-grip { font-size: 0.95em; padding: 2px 2px; }
+.reorder-grip:hover:not(.disabled), .col-grip:hover { color: var(--text-primary); }
+.reorder-grip.disabled { opacity: 0.2; cursor: not-allowed; }
+.stock-row.dragging, .col-toggle-item.dragging { opacity: 0.5; }
+.stock-row.drop-before, .col-toggle-item.drop-before { box-shadow: inset 0 2px 0 var(--accent-blue); }
+.stock-row.drop-after, .col-toggle-item.drop-after { box-shadow: inset 0 -2px 0 var(--accent-blue); }
 .reorder-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.7em; padding: 0 4px; line-height: 1.2; }
 .reorder-btn:hover:not(:disabled) { color: var(--text-primary); }
 .reorder-btn:disabled { opacity: 0.2; cursor: default; }

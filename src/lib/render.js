@@ -13,6 +13,10 @@ export function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// ドラッグで並べ替えている間は、定期更新による一覧の描き直しを止める(つかんでいる行が動かないように)
+let _dragging = false;
+export function setDragging(v) { _dragging = v; }
+
 export function initRender(tableHeader, stockList, portfolioTotalEl) {
   _tableHeader = tableHeader;
   _stockList = stockList;
@@ -85,7 +89,11 @@ export function updateSigScroll(elapsed = {}, savedAt = performance.now(), onlyC
 export function renderCell(s, k, fl, rowOpts = {}) {
   const up = s.change >= 0, rsiC = s.rsi != null ? (s.rsi > 70 ? "over" : s.rsi < 30 ? "under" : "") : "";
   switch (k) {
-    case "reorder": return `<span class="cell-reorder"><button class="reorder-btn up" data-code="${s.code}"${rowOpts.isFirst ? " disabled" : ""}>▲</button><button class="reorder-btn down" data-code="${s.code}"${rowOpts.isLast ? " disabled" : ""}>▼</button></span>`;
+    case "reorder": {
+      const canDrag = rowOpts.canDrag !== false;
+      const gripTitle = canDrag ? "ドラッグして並べ替え" : "並べ替えは、ソートと絞り込みを解除してから";
+      return `<span class="cell-reorder"><span class="reorder-grip${canDrag ? "" : " disabled"}" title="${gripTitle}" aria-hidden="true">⋮⋮</span><span class="reorder-arrows"><button class="reorder-btn up" data-code="${s.code}"${rowOpts.isFirst ? " disabled" : ""}>▲</button><button class="reorder-btn down" data-code="${s.code}"${rowOpts.isLast ? " disabled" : ""}>▼</button></span></span>`;
+    }
     case "code": return `<span class="cell-code" title="右クリックで行カラー設定">${s.code}</span>`;
     case "name": {
       const nc = getNameCache(); const nJ = nc[s.code] || s.nameJa;
@@ -192,7 +200,7 @@ function computeLayoutKey(gridTpl) {
   return [gridTpl, state.density, state.sparkPeriod, state.pinCols, state.rowMode, JSON.stringify(state.sigCats)].join("|");
 }
 
-function computeRowHash(s, fl, isFirst, isLast) {
+function computeRowHash(s, fl, isFirst, isLast, canDrag) {
   const pf = state.portfolio[s.code];
   const al = state.alerts[s.code];
   return [
@@ -203,11 +211,12 @@ function computeRowHash(s, fl, isFirst, isLast) {
     s.week52High, s.week52Low, s.signals?.join("|"),
     state.priceDirs[s.code], fl,
     pf?.cost, pf?.qty, al?.hi, al?.lo, al?.pct, state.notes[s.code], state.rowColors[s.code],
-    isFirst, isLast,
+    isFirst, isLast, canDrag,
   ].join("|");
 }
 
 export function render() {
+  if (_dragging) return;
   const stks = stocks();
   if (stks.length === 0) {
     const failed = state.tabs[state.activeTabIdx]?.fetchFailed;
@@ -280,13 +289,16 @@ export function render() {
   const sigSavedAt = performance.now();
   const updatedCodes = new Set();
 
+  // 手動の並びを動かせるのは、ソートも絞り込みもしていないときだけ(そうでないと、見た目の並びと一致しない)
+  const canDrag = !state.sortKey && state.signalFilter === "all";
+
   // 新しい行リストを構築（差分更新）
   const newRowEls = [];
   for (let i = 0; i < sorted.length; i++) {
     const s = sorted[i];
     const fl = priceFlash[s.code] ? "flash-" + priceFlash[s.code] : "";
-    const rowOpts = { isFirst: i === 0, isLast: i === sorted.length - 1 };
-    const h = computeRowHash(s, fl, rowOpts.isFirst, rowOpts.isLast);
+    const rowOpts = { isFirst: i === 0, isLast: i === sorted.length - 1, canDrag };
+    const h = computeRowHash(s, fl, rowOpts.isFirst, rowOpts.isLast, rowOpts.canDrag);
 
     let row = existingRows.get(s.code);
     const needsUpdate = !row || _rowHashes.get(s.code) !== h;

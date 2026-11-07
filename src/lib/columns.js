@@ -1,5 +1,6 @@
 import { state } from "./state.js";
 import { ALL_COLS, COL_GROUPS_3ROW } from "./constants.js";
+import { reorderGroupKeys } from "./groupOrder.js";
 
 // ===== 列の表示制御 =====
 export function visibleCols() {
@@ -22,7 +23,7 @@ export function visibleCols() {
 // ===== 3行表示モード用（固定レイアウト、カスタマイズ非対応） =====
 export function visibleCols3() {
   return [
-    { k: "reorder", w: "36px", label: "" },
+    { k: "reorder", w: "52px", label: "" },
     ...COL_GROUPS_3ROW.map(c => state.colWidths[c.k] ? { ...c, w: state.colWidths[c.k] + "px" } : c),
     { k: "del", w: "28px", label: "" },
   ];
@@ -54,5 +55,13 @@ export function moveGroup(toggleKey, dir, saveColStateFn, renderFn, renderColPan
   const newOrder = [...state.colOrder];
   allPos.forEach((pos, i) => { newOrder[pos] = newKeys[i]; });
   state.colOrder = newOrder;
+  saveColStateFn(); renderFn(); renderColPanelFn();
+}
+
+// ドラッグでの並べ替え。グループ(表示切替の単位)の新しい並びを受け取って、列の並びに反映する。
+export function reorderGroups(newGroupOrder, saveColStateFn, renderFn, renderColPanelFn) {
+  const next = reorderGroupKeys(state.colOrder, ALL_COLS, newGroupOrder);
+  if (!next) return;
+  state.colOrder = next;
   saveColStateFn(); renderFn(); renderColPanelFn();
 }

@@ -1,6 +1,6 @@
 // ===== カラム定義 =====
 export const ALL_COLS = [
-  { k: "reorder",    w: "36px",                  label: "" },
+  { k: "reorder",    w: "52px",                  label: "" },
   { k: "code",       w: "70px",                  label: "コード",    movable: true, toggle: "code" },
   { k: "name",       w: "minmax(80px, 0.7fr)",   label: "企業名",    movable: true, toggle: "name" },
   { k: "price",      w: "105px",                 label: "現在株価",  movable: true, toggle: "price" },
