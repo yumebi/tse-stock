@@ -17,7 +17,3 @@ id = "RUSTSEC-2024-0370"
 ignoreUntil = 2026-12-31
 reason = "proc-macro-error は Tauri が使うビルド時のマクロ。修正版がなく、実行時には影響しない。Tauri 側の更新待ち"
 
-[[IgnoredVulns]]
-id = "RUSTSEC-2026-0436"
-ignoreUntil = 2026-11-21
-reason = "壊れた .xls を読ませたときのパニック・メモリ枯渇(DoS のみ)。TSE が読むのは日本取引所グループ(JPX)の上場銘柄一覧だけ。修正版 calamine 0.38.0 が公開から14日になる 2026-11-20 以降に更新する"
